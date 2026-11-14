@@ -7,17 +7,25 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
+from difflib import SequenceMatcher
 from typing import Callable, Optional
 
+from . import gemini, typer
 from .agents import make_agent
 from .gate import GateSettings, WhisperGate, suggest_threshold
 from .hub import Hub
 from .owner import OwnerFilter
 from .stt import STTError, make_engine
+from .voice import make_voice
 from .wake import WakeGate
 
 CALIBRATION_FRAMES = 150  # 3 seconds
+CLEANUP_PROMPT = ("A speech recognizer transcribed this whispered command and may have misheard words. "
+                  "Fix misheard words, spelling and punctuation. Do not answer it, explain it or add anything. "
+                  "Reply with the corrected command only.\n\nCommand: ")
+TYPE_PREFIX = re.compile(r"type\b[\s,:]*(\S.*)", re.IGNORECASE | re.DOTALL)
 
 
 class Pipeline:
@@ -33,6 +41,7 @@ class Pipeline:
         self.owner = OwnerFilter()
         self.wake = WakeGate(cfg.wake_aliases, clock=clock)
         self.agent = agent or make_agent(cfg)
+        self.voice = make_voice(cfg, hub)
         self.engine = None
         self.listening = False
         self.band_state = "starting"
@@ -44,6 +53,7 @@ class Pipeline:
         self._noise_dbs: list = []
         self._last_level = 0.0
         self._ignored = 0
+        self._commands: set = set()  # running commands, held so a shielded task is not garbage-collected
 
     # ---- lifecycle ----
 
@@ -53,11 +63,13 @@ class Pipeline:
 
     async def shutdown(self) -> None:
         self.listening = False
-        for task in (self._flush_task, self._reconnect_task):
+        for task in (self._flush_task, self._reconnect_task, *self._commands):
             if task:
                 task.cancel()
         await self._stop_engine()
         await self.agent.stop()
+        if self.voice:
+            await self.voice.close()
 
     def status(self) -> None:
         self.hub.emit({
@@ -73,6 +85,9 @@ class Pipeline:
             "threshold": round(self.gate.threshold, 1),
             "calibrated": self.gate.s.calibrated,
             "wake_aliases": list(self.cfg.wake_aliases),
+            "source": self.cfg.transport,
+            "agent": self.cfg.agent,
+            "voice": self.cfg.voice_device if self.voice else "",
         })
 
     def set_band_status(self, state: str, detail: str = "") -> None:
@@ -247,9 +262,19 @@ class Pipeline:
         command = self.wake.feed(text)
         self.status()
         if command:
-            await self.run_command(command)
+            # a new final cancels _flush_task; the command it already took must still run to the end
+            task = asyncio.ensure_future(self.run_command(command))
+            self._commands.add(task)
+            task.add_done_callback(self._commands.discard)
+            await asyncio.shield(task)
 
     async def run_command(self, command: str) -> None:
+        typed = TYPE_PREFIX.match(command)
+        if typed:
+            await self._type(typed.group(1))  # dictation is typed as heard, not rewritten by cleanup
+            return
+        if self.cfg.cleanup and self.cfg.gemini_key:
+            command = await self._clean(command)
         self.hub.emit({"type": "command", "text": command, "state": "sending", "dry_run": self.cfg.dry_run})
         try:
             result = await self.agent.send(command)
@@ -258,8 +283,36 @@ class Pipeline:
             return
         self.hub.emit({"type": "command", "text": command, "state": result.state, "detail": result.detail})
 
-    def _on_reply(self, text: str) -> None:
-        self.hub.emit({"type": "reply", "text": text})
+    async def _type(self, text: str) -> None:
+        try:
+            await asyncio.to_thread(typer.type_text, text)
+        except Exception as e:
+            self.hub.emit({"type": "typed", "text": text, "state": "error", "detail": str(e)})
+            return
+        self.hub.emit({"type": "typed", "text": text, "state": "typed", "detail": "Typed into the app in front."})
+
+    async def _clean(self, raw: str) -> str:
+        """raw with misheard words and punctuation fixed by Gemini, or raw itself if Gemini fails or adds text."""
+        event = {"type": "cleanup", "raw": raw, "text": raw}
+        try:
+            text = (await gemini.ask(CLEANUP_PROMPT + raw, self.cfg.gemini_key, self.cfg.gemini_model)).strip()
+            if not text:
+                event["error"] = "Gemini sent an empty reply; kept what you said."
+            elif len(text) > 2 * len(raw) + 20:
+                event["error"] = "Gemini's reply was much longer than the command; kept what you said."
+            elif SequenceMatcher(None, raw.lower(), text.lower()).ratio() < 0.6:  # an answer, not a correction
+                event["error"] = "Gemini's reply was not a correction of the command; kept what you said."
+            else:
+                event["text"] = text
+        except Exception as e:
+            event["error"] = f"Cleanup failed, kept what you said: {e}"
+        self.hub.emit(event)
+        return event["text"]
+
+    def _on_reply(self, text: str, source: str = "instinct") -> None:
+        self.hub.emit({"type": "reply", "text": text, "from": source})
+        if self.voice:
+            self.voice.say(text)
 
     def _on_agent_error(self, message: str) -> None:
         self.error("agent", message)

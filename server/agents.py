@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from . import gemini
 from .imessage import IMessageBridge
 
 
@@ -50,7 +51,37 @@ class InstinctAgent:
         return AgentResult("sent", f"Texted {self.bridge.handle}.")
 
 
+ANSWER_PROMPT = ("Answer this whispered request in one to three short sentences that will be read aloud. "
+                 "Plain text only: no lists, no markdown.\n\nRequest: ")
+
+
+class GeminiAgent:
+    """Gemini answers the command itself. It acts on nobody's behalf, so dry run does not block it."""
+
+    def __init__(self, key: str, model: str) -> None:
+        self.key, self.model = key, model
+        self._on_reply: Optional[Callable[[str, str], None]] = None
+
+    async def start(self, on_reply: Callable[[str, str], None], on_error: Callable[[str], None]) -> None:
+        self._on_reply = on_reply
+
+    async def stop(self) -> None:
+        return None
+
+    async def send(self, command: str) -> AgentResult:
+        answer = (await gemini.ask(ANSWER_PROMPT + command, self.key, self.model)).strip()
+        if not answer:
+            raise RuntimeError("Gemini sent an empty answer.")
+        if self._on_reply:
+            self._on_reply(answer, "gemini")
+        return AgentResult("sent", "Asked Gemini.")
+
+
 def make_agent(cfg):
+    if cfg.agent == "gemini":
+        if not cfg.gemini_key:
+            return DryRunAgent("GEMINI_API_KEY is not set")
+        return GeminiAgent(cfg.gemini_key, cfg.gemini_model)
     if cfg.dry_run:
         return DryRunAgent()
     if not cfg.instinct_to:
