@@ -29,6 +29,10 @@ CALIBRATION_FRAMES = 150  # 3 seconds
 GATE_STATS_FRAMES = 50  # one "gate" event a second
 RATE_SAMPLES = 10  # motion samples needed to measure the band's rate before the body gate is made
 MOTION_STALE_S = 1.0  # no motion for this long: the own-voice gate steps aside, so the band never goes deaf
+# how long a ready turn waits for the gate to close; in whisper mode room noise can hold it open for
+# seconds after the last word, so partials from the speech service are the "still talking" signal there
+GATE_WAIT_S = 5.0
+GATE_WAIT_WHISPER_S = 1.5
 # arrival_s: our clock since the WAV's first frame; wav_s: audio recorded by then; t, n: the kit's own
 MOTION_COLUMNS = ("arrival_s", "wav_s", "t", "n", "ax", "ay", "az")
 QUICK_CLOSE_S = 5.0  # a speech connection that closes sooner than this after opening is refused, not dropped
@@ -327,6 +331,8 @@ class Pipeline:
             text = " ".join(r["text"] for r in runs)
             if text:
                 self.hub.emit({"type": "partial", "text": text})
+                if self._pending:
+                    self._schedule_flush()  # words are still coming in: the settle timer starts again
         elif kind == "final":
             self._on_final(ev)
         elif kind == "merge":
@@ -367,7 +373,8 @@ class Pipeline:
     async def _flush_later(self) -> None:
         await asyncio.sleep(self.cfg.settle_s)
         waited = 0.0
-        while self.gate.is_open and waited < 5.0:  # you are still talking
+        limit = GATE_WAIT_WHISPER_S if self.gate.s.whisper_only else GATE_WAIT_S
+        while self.gate.is_open and waited < limit:  # you are still talking
             await asyncio.sleep(0.2)
             waited += 0.2
         await self.flush_turn()
