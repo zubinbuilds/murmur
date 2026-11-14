@@ -119,12 +119,12 @@ function onGate(ev) {
   const passed = (ev.passed || 0) / frames;
   const voiced = (ev.voiced || 0) / frames;
   const word = passed >= HEARING_SHARE ? "Hearing you"
-    : voiced >= VOICED_SHARE && passed < QUIET_PASS_SHARE ? "Ignoring nearby voice" : "";
+    : voiced >= VOICED_SHARE && passed < QUIET_PASS_SHARE ? "Ignoring spoken voice" : "";
   $("gate-word").textContent = word;
   $("gate-word").className = "gate-word" + (word === "Hearing you" ? " hearing" : word ? " ignoring" : "");
   ignoredVoiceFrames += ev.voiced || 0;
   const secs = Math.round(ignoredVoiceFrames * FRAME_S);
-  $("ignored-secs").textContent = secs > 0 ? `Ignored ${secs} s of nearby voice` : "";
+  $("ignored-secs").textContent = secs > 0 ? `Ignored ${secs} s of spoken voice` : "";
 }
 
 function setGate(db) {

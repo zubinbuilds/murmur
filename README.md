@@ -20,7 +20,7 @@ whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 
 ## Status
 
-Built and tested against the Vexo kit's pretend band, with a mock speech engine: 157 automated
+Built and tested against the Vexo kit's pretend band, with a mock speech engine: 158 automated
 tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
 the real band over Bluetooth, sending an iMessage,
 and whether the whisper gate separates your whisper from loud music in a real room. See
@@ -125,7 +125,7 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 - **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
 - **Clear** (a button on the page): empties the transcript on every open page.
 - **Tuning on a real recording**: `--record` saves the raw band audio as a WAV in `recordings/`; `scripts/guided_recording.py [USB PORT]` runs a guided 40 s recording, and `scripts/analyze_recording.py WAV --segments ...` shows what the gate makes of it.
-- **Whisper mode** (`server/gate.py`, the default; `MURMUR_WHISPER_ONLY=0`, `--sim` or the page's Settings switch give voice mode): a whisper has no pitch, nearby talk does. A turn opens after 200 ms of loud unpitched sound (6 dB over the room), and 100 ms of pitch in a row is silenced. On one 40 s recording, one room, the gate was open for 99% of the owner's whisper and 0% of the person next to them, room chatter and the owner's normal voice. Voice mode (14 dB over the room) on the same recording: whisper 57%, normal voice 100%, the other person 0%, room 7%.
+- **Whisper mode** (`server/gate.py`, the default; `MURMUR_WHISPER_ONLY=0`, `--sim` or the page's Settings switch give voice mode): a whisper has no pitch, nearby talk does. A turn opens after 200 ms of loud unpitched sound (5 dB over the room), and 100 ms of pitch in a row is silenced. On one 40 s recording, one room, the gate was open for 99% of the owner's whisper and 0% of the person next to them, room chatter and the owner's normal voice. Voice mode (14 dB over the room) on the same recording: whisper 57%, normal voice 100%, the other person 0%, room 7%.
 - **Own-voice motion** (`MURMUR_OWN_VOICE`, off): we measured the band's accelerometer as an own-voice sensor on that recording. No frequency band separated the wearer's speech (the band moves all the time), so it stays off.
 
 ## Privacy and safety
