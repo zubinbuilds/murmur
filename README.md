@@ -110,6 +110,7 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 - **Typing** (`server/typer.py`): "Hey Murmur, type ..." types into the app in front (needs Accessibility permission).
 - **Replies aloud** (`server/voice.py`): set `MURMUR_VOICE_DEVICE`; ElevenLabs or Deepgram through Pipecat (`MURMUR_TTS`).
 - **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
+- **Whispers only** (`server/gate.py`, `MURMUR_WHISPER_ONLY`, on by default, off with `--sim`, a switch in the page's Settings): drops voiced sound, like people talking normally nearby, before it reaches the speech service. A whisper has no pitch, so it gets through.
 
 ## Privacy and safety
 
@@ -160,6 +161,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
   common heuristic for newer macOS message storage.
 - **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
   the teeth). Test these with the board unsealed, held against your back teeth.
+- **Whispers only** on real whispers, and while someone talks nearby: untested.
 - **Everything under "Also built"** and the Pipecat engine: tested against fakes only. With a
   Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs or Deepgram.
 

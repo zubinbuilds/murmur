@@ -63,6 +63,7 @@ function applyState(s) {
   $("listen").classList.toggle("on", !!state.listening);
   $("armed").classList.toggle("hidden", !state.armed);
   if (state.engine) $("engine").value = state.engine;
+  $("whisper-only").checked = !!state.whisper_only;
   $("owner").textContent = state.enrolling ? "Whisper now..." : state.owner ? `You are ${state.owner}` : "";
   if (typeof state.threshold === "number") setGate(state.threshold);
 }
@@ -226,6 +227,7 @@ function handle(ev) {
 
 $("listen").onclick = () => send({ cmd: "listen", on: !state.listening });
 $("engine").onchange = (e) => send({ cmd: "engine", name: e.target.value });
+$("whisper-only").onchange = (e) => send({ cmd: "whisper_only", on: e.target.checked });
 $("cal-noise").onclick = () => send({ cmd: "calibrate", phase: "noise" });
 $("cal-whisper").onclick = () => send({ cmd: "calibrate", phase: "whisper" });
 $("enroll").onclick = () => send({ cmd: "enroll" });

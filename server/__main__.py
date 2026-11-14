@@ -34,6 +34,7 @@ def main() -> None:
     cfg = Config.from_env()
     if args.sim:
         cfg.transport = "sim"
+        cfg.whisper_only = False  # the kit's sample recording is a normal speaking voice
     if args.mic is not None:
         cfg.transport = "mic"
         cfg.mic_device = args.mic or cfg.mic_device

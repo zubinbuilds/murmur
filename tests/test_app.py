@@ -7,7 +7,7 @@ from aiohttp import WSServerHandshakeError
 from aiohttp.test_utils import TestClient, TestServer
 
 from server.agents import AgentResult
-from server.app import CFG, build_app, origin_allowed
+from server.app import CFG, build_app, handle_command, origin_allowed
 from server.config import KIT_PYTHON, Config
 from server.stt.mock import MockSTT
 
@@ -83,6 +83,21 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         ws = await self.client.ws_connect("/ws", headers={"Origin": f"http://localhost:{port}"})
         await ws.close()
 
+    async def test_whisper_only_switch_reaches_the_pipeline(self):
+        class FakePipeline:
+            def __init__(self):
+                self.calls = []
+
+            def set_whisper_only(self, on):
+                self.calls.append(on)
+
+        pipeline = FakePipeline()
+        await handle_command(pipeline, {"cmd": "whisper_only", "on": True})
+        await handle_command(pipeline, {"cmd": "whisper_only", "on": 0})
+        self.assertEqual(pipeline.calls, [True, False])
+        with self.assertRaises(KeyError):
+            await handle_command(pipeline, {"cmd": "whisper_only"})
+
     def test_origin_rules(self):
         class Req:
             def __init__(self, origin):
@@ -99,7 +114,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                          "run scripts/setup.sh to fetch the Vexo kit and install av")
     async def test_pretend_band_audio_flows_end_to_end(self):
         """The kit's pretend band replays a recording; it must reach the gate and the engine."""
-        cfg = Config(settle_s=0.05, stt="mock", transport="sim", band_number=82)
+        cfg = Config(settle_s=0.05, stt="mock", transport="sim", band_number=82, whisper_only=False)
         await self.start(cfg=cfg, with_band=True)
         ws = await self.client.ws_connect("/ws")
 

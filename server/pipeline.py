@@ -37,7 +37,8 @@ class Pipeline:
         self.engine_name = cfg.stt
         self._engine_factory = engine_factory or (lambda name: make_engine(name, cfg))
         self.gate = WhisperGate(GateSettings(
-            threshold_db=cfg.gate_threshold_db, margin_db=cfg.gate_margin_db, hangover_ms=cfg.turn_silence_ms))
+            threshold_db=cfg.gate_threshold_db, margin_db=cfg.gate_margin_db, hangover_ms=cfg.turn_silence_ms,
+            whisper_only=cfg.whisper_only))
         self.owner = OwnerFilter()
         self.wake = WakeGate(cfg.wake_aliases, clock=clock)
         self.agent = agent or make_agent(cfg)
@@ -84,6 +85,7 @@ class Pipeline:
             "enrolling": self.owner.enrolling,
             "threshold": round(self.gate.threshold, 1),
             "calibrated": self.gate.s.calibrated,
+            "whisper_only": self.gate.s.whisper_only,
             "wake_aliases": list(self.cfg.wake_aliases),
             "source": self.cfg.transport,
             "agent": self.cfg.agent,
@@ -370,6 +372,10 @@ class Pipeline:
 
     def set_threshold(self, db: float) -> None:
         self.gate.set_threshold(db)
+        self.status()
+
+    def set_whisper_only(self, on: bool) -> None:
+        self.gate.s.whisper_only = bool(on)
         self.status()
 
     def enroll(self) -> None:

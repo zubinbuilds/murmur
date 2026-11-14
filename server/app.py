@@ -76,6 +76,8 @@ async def handle_command(pipeline: Pipeline, data: dict) -> None:
         pipeline.set_threshold(float(data["db"]))
     elif cmd == "enroll":
         pipeline.enroll()
+    elif cmd == "whisper_only":
+        pipeline.set_whisper_only(bool(data["on"]))
     elif cmd == "say":
         await pipeline.inject(str(data["text"])[:500])
     else:

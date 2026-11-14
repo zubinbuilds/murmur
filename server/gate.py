@@ -27,6 +27,11 @@ FRAME_MS = 20
 FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS // 1000  # 320
 FRAME_BYTES = FRAME_SAMPLES * 2
 SILENCE = bytes(FRAME_BYTES)
+MIN_LAG, MAX_LAG = SAMPLE_RATE // 400, SAMPLE_RATE // 70  # pitch periods of a speaking voice, 70 to 400 Hz
+# Peak autocorrelation above this is a voiced (pitched) frame. Measured: synthetic voices at 110 to 220 Hz
+# score 0.89 or more, white and lightly filtered noise 0.23 or less (95th percentile), and 75% of the loud
+# frames in the kit's normal-voice sample score above it. A whisper has no pitch.
+VOICED_PEAK = 0.5
 
 
 def frame_db(frame: bytes) -> float:
@@ -38,6 +43,19 @@ def frame_db(frame: bytes) -> float:
     return 20.0 * math.log10(max(rms, 1.0) / 32768.0)
 
 
+def voicing(window: np.ndarray) -> float:
+    """Highest normalized autocorrelation at a pitch lag: near 1 for a voice, near 0 for noise or a whisper."""
+    x = window.astype(np.float64)
+    x -= x.mean()
+    n = len(x)
+    r = np.correlate(x, x, "full")[n - 1:]  # r[k] = sum of x[i] * x[i + k]
+    energy = np.cumsum(x * x)
+    k = np.arange(MIN_LAG, MAX_LAG + 1)
+    denom = np.sqrt(energy[n - 1 - k] * (energy[-1] - energy[k - 1]))  # energy of x[:n-k] times x[k:]
+    ok = denom > 0
+    return float(np.max(r[k][ok] / denom[ok])) if ok.any() else 0.0
+
+
 @dataclass
 class GateSettings:
     threshold_db: float = -45.0
@@ -47,6 +65,7 @@ class GateSettings:
     hangover_ms: int = 700
     preroll_ms: int = 200
     max_turn_ms: int = 20000
+    whisper_only: bool = False  # voiced frames (someone speaking aloud) are treated as quiet and sent as silence
 
 
 @dataclass
@@ -66,6 +85,7 @@ class WhisperGate:
         self._run = 0  # consecutive loud frames while closed
         self._quiet = 0  # consecutive quiet frames while open
         self._open_frames = 0
+        self._prev = np.zeros(FRAME_SAMPLES, dtype=np.int16)
 
     @property
     def is_open(self) -> bool:
@@ -94,6 +114,11 @@ class WhisperGate:
             frame = (frame + SILENCE)[:FRAME_BYTES]
         db = frame_db(frame)
         loud = db > self.threshold
+        samples = np.frombuffer(frame, dtype=np.int16)
+        if self.s.whisper_only and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK:
+            loud = False
+            frame = SILENCE
+        self._prev = samples
         turn_end = False
         passed = False
 
