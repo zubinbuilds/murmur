@@ -64,6 +64,18 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(final["state"], "dry-run")
         self.assertEqual(self.agent.sent, ["email Sam I am late"])
 
+    async def test_clear_empties_open_pages_and_what_new_pages_replay(self):
+        await self.start(with_band=False)
+        ws = await self.client.ws_connect("/ws")
+        await next_event(ws, "hello")
+        await ws.send_json({"cmd": "say", "text": "Hey Murmur, email Sam I am late"})
+        await next_event(ws, "command")
+        await ws.send_json({"cmd": "clear"})
+        await next_event(ws, "clear")
+        later = await self.client.ws_connect("/ws")
+        hello = await next_event(later, "hello")
+        self.assertEqual(hello["history"], [])
+
     async def test_bad_messages_are_reported_not_fatal(self):
         await self.start(with_band=False)
         ws = await self.client.ws_connect("/ws")

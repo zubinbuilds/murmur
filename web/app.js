@@ -226,6 +226,13 @@ function handle(ev) {
       following = true;
       (ev.history || []).forEach(handle);
       break;
+    case "clear":
+      document.querySelectorAll("#transcript .line").forEach((n) => n.remove());
+      $("partial").textContent = "";
+      ignoredWords = 0;
+      $("ignored").textContent = "";
+      clearReplayed();
+      break;
     case "status":
       applyState(ev);
       break;
@@ -278,6 +285,7 @@ $("whisper-only").onchange = (e) => send({ cmd: "whisper_only", on: e.target.che
 $("cal-noise").onclick = () => send({ cmd: "calibrate", phase: "noise" });
 $("cal-whisper").onclick = () => send({ cmd: "calibrate", phase: "whisper" });
 $("enroll").onclick = () => send({ cmd: "enroll" });
+$("clear").onclick = () => send({ cmd: "clear" });
 $("jump").onclick = () => {
   following = true;
   follow();

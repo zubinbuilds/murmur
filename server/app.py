@@ -87,6 +87,8 @@ async def handle_command(pipeline: Pipeline, data: dict) -> None:
         pipeline.enroll()
     elif cmd == "whisper_only":
         pipeline.set_whisper_only(bool(data["on"]))
+    elif cmd == "clear":
+        pipeline.hub.clear()
     elif cmd == "say":
         if not isinstance(data["text"], str):
             raise TypeError("say needs text")

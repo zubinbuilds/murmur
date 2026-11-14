@@ -40,6 +40,11 @@ class Hub:
         if self._queue is not None:
             self._queue.put_nowait(json.dumps(event))
 
+    def clear(self) -> None:
+        """Forget the replay history and tell every open page to empty its transcript."""
+        self.history.clear()
+        self.emit({"type": "clear"})
+
     async def attach(self, ws) -> None:
         self.clients.add(ws)
         await ws.send_str(json.dumps({"type": "hello", "state": self.state, "history": list(self.history)}))
