@@ -3,74 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Murmur</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <h1>Murmur</h1>
-    <div class="pills">
-      <span class="pill" id="pill-conn">Connecting to server</span>
-      <span class="pill" id="pill-band">Band</span>
-      <span class="pill" id="pill-listen">Not listening</span>
-      <span class="pill hidden" id="pill-armed">Armed: say your command</span>
-      <span class="pill warn hidden" id="pill-dry">Dry run: nothing is sent</span>
-    </div>
+  <header class="bar">
+    <span class="wordmark">murmur</span>
+    <span class="meta" id="meta"></span>
+    <span class="tag dry hidden" id="badge-dry">Dry run</span>
+    <span class="conn" id="conn" title="Connecting"><span class="dot"></span><span id="conn-text"></span></span>
   </header>
 
-  <main>
-    <section class="panel" aria-label="Transcript">
-      <div class="meter" title="Mic level. The marker is the whisper gate.">
-        <div id="meter-fill"></div>
-        <div id="meter-threshold"></div>
-        <span id="meter-label">-90 dB</span>
+  <main class="layout">
+    <section class="stage" aria-label="Live transcript">
+      <div class="controls">
+        <button id="listen" class="listen" type="button">Start</button>
+        <div class="meter" id="meter" role="meter" aria-label="Mic level in decibels" aria-valuemin="-90" aria-valuemax="0" aria-valuenow="-90">
+          <div class="meter-fill" id="meter-fill"></div>
+          <div class="meter-gate" id="meter-gate"></div>
+        </div>
+        <span class="tag armed hidden" id="armed" role="status">Say command</span>
       </div>
-      <div id="transcript" aria-live="polite"></div>
-      <div id="partial"></div>
-      <p class="muted" id="ignored"></p>
+
+      <div class="transcript" id="transcript" aria-live="polite">
+        <p class="empty" id="empty">Start, then whisper.</p>
+        <p class="partial" id="partial" aria-hidden="true"></p>
+      </div>
     </section>
 
-    <aside>
-      <section class="panel">
-        <h2>Listening</h2>
-        <button id="listen" class="primary">Start listening</button>
-        <label>Speech engine
-          <select id="engine">
-            <option value="elevenlabs">ElevenLabs Scribe v3 Live</option>
-            <option value="deepgram">Deepgram Nova-3</option>
-            <option value="mock">Mock (no key)</option>
-          </select>
-        </label>
-        <p class="muted" id="band-detail"></p>
-      </section>
+    <aside class="rail" aria-label="Commands">
+      <ol class="log" id="log"></ol>
 
-      <section class="panel">
-        <h2>Whisper gate</h2>
-        <p class="muted">Only audio above the marker is transcribed. Calibrate in the room you will use it in, with the music on if there will be music.</p>
-        <div class="row">
-          <button id="cal-noise">1. Record room (3 s)</button>
-          <button id="cal-whisper">2. Whisper (3 s)</button>
-        </div>
-        <p class="muted" id="cal-msg"></p>
-        <div class="row">
-          <button id="enroll">Enroll my voice</button>
-          <span class="muted" id="owner"></span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Agent</h2>
-        <p class="muted">Start a turn with "Hey <span id="wake-name">Murmur</span>".</p>
-        <ul id="commands"></ul>
-      </section>
-
-      <section class="panel">
-        <h2>Test without speaking</h2>
+      <details class="more">
+        <summary>Settings</summary>
         <form id="say-form" class="row">
-          <input id="say-text" type="text" placeholder="Hey Murmur, email Sam I'm late" autocomplete="off">
-          <button type="submit">Send</button>
+          <input id="say-text" type="text" aria-label="Test without speaking" placeholder="Hey Murmur, text Sam I'm running late" autocomplete="off" maxlength="500">
+          <button type="submit" class="btn dark">Send</button>
         </form>
-      </section>
+        <select id="engine" aria-label="Speech engine">
+          <option value="elevenlabs">ElevenLabs Scribe v3 Live</option>
+          <option value="deepgram">Deepgram Nova-3</option>
+          <option value="pipecat">Deepgram Nova-3 via Pipecat</option>
+          <option value="mock">Mock</option>
+        </select>
+        <div class="row">
+          <button id="cal-noise" class="btn" type="button">1. Room</button>
+          <button id="cal-whisper" class="btn" type="button">2. Whisper</button>
+          <button id="enroll" class="btn" type="button">Enroll</button>
+        </div>
+        <p class="hint" id="cal-msg" role="status"></p>
+        <p class="hint" id="owner"></p>
+        <p class="hint" id="ignored"></p>
+        <p class="hint" id="band-detail"></p>
+      </details>
     </aside>
   </main>
   <script src="/static/app.js"></script>

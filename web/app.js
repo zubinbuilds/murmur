@@ -3,7 +3,19 @@
 const $ = (id) => document.getElementById(id);
 let ws;
 let state = {};
-const commandCards = new Map();
+let ignoredWords = 0;
+const commandCards = new Map(); // command text -> entry
+const typedCards = new Map(); // typed text -> entry
+const replyCards = new Map(); // trimmed reply text -> entry
+const cleanups = new Map(); // raw or tidied text -> cleanup event that arrived before its command
+
+const SOURCES = { ble: "Band", sim: "Pretend band", mic: "Mac mic" };
+const ENGINES = { elevenlabs: "ElevenLabs", deepgram: "Deepgram", pipecat: "Deepgram via Pipecat", mock: "Mock" };
+const AGENTS = { instinct: "Instinct", gemini: "Gemini" };
+const STATES = {
+  sending: ["sending", "busy"], sent: ["sent", "ok"], typed: ["typed", "ok"],
+  "dry-run": ["dry run", "dry"], error: ["error", "bad"],
+};
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -12,73 +24,148 @@ function send(msg) {
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
+  if (text !== undefined && text !== null) node.textContent = String(text);
   return node;
 }
 
-function setPill(id, text, kind) {
-  const pill = $(id);
-  pill.textContent = text;
-  pill.className = "pill" + (kind ? " " + kind : "");
-}
+const pct = (db) => Math.max(0, Math.min(100, ((db + 90) / 90) * 100));
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => setPill("pill-conn", "Server connected", "ok");
+  ws.onopen = () => setConn("", "ok", "Connected");
   ws.onclose = () => {
-    setPill("pill-conn", "Server disconnected", "bad");
+    setConn("Offline", "bad", "Reconnecting");
     setTimeout(connect, 1000);
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
 }
 
+function setConn(text, kind, title) {
+  $("conn").className = "conn " + kind;
+  $("conn").title = title;
+  $("conn-text").textContent = text;
+}
+
+// ---- status ----
+
 function applyState(s) {
   state = { ...state, ...s };
   const band = state.band || "starting";
-  const bandKind = band === "connected" || band === "simulated" ? "ok" : band === "error" ? "bad" : "";
-  setPill("pill-band", `Band: ${band}`, bandKind);
+  const source = state.source || "ble";
+  const healthy = source === "mic" || band === "connected" || band === "simulated";
+  const input = (SOURCES[source] || source) + (healthy ? "" : ` (${band})`);
+  $("meta").textContent = [input, ENGINES[state.engine] || state.engine, AGENTS[state.agent] || state.agent]
+    .filter(Boolean).join(" · ");
+  $("meta").title = [state.band_detail, state.voice && `Voice: ${state.voice}`].filter(Boolean).join("\n");
   $("band-detail").textContent = state.band_detail || "";
-  setPill("pill-listen", state.listening ? "Listening" : "Not listening", state.listening ? "ok" : "");
-  $("pill-armed").classList.toggle("hidden", !state.armed);
-  $("pill-armed").classList.add("pill", "warn");
-  $("pill-dry").classList.toggle("hidden", !state.dry_run);
-  $("listen").textContent = state.listening ? "Stop listening" : "Start listening";
+  $("badge-dry").classList.toggle("hidden", !state.dry_run);
+  $("listen").textContent = state.listening ? "Stop" : "Start";
   $("listen").classList.toggle("on", !!state.listening);
+  $("armed").classList.toggle("hidden", !state.armed);
   if (state.engine) $("engine").value = state.engine;
-  $("owner").textContent = state.enrolling ? "Whisper now..." : state.owner ? `You: ${state.owner}` : "";
-  if (state.wake_aliases && state.wake_aliases.length) {
-    $("wake-name").textContent = state.wake_aliases[0].replace(/^./, (c) => c.toUpperCase());
-  }
-  if (typeof state.threshold === "number") {
-    $("meter-threshold").style.left = pct(state.threshold) + "%";
-  }
+  $("owner").textContent = state.enrolling ? "Whisper now..." : state.owner ? `You are ${state.owner}` : "";
+  if (typeof state.threshold === "number") setGate(state.threshold);
 }
 
-const pct = (db) => Math.max(0, Math.min(100, ((db + 90) / 90) * 100));
+function setGate(db) {
+  $("meter-gate").style.left = pct(db) + "%";
+}
 
-function addTranscript(text, speakerLabel) {
-  const line = el("div", "line");
-  line.append(el("span", "chip", speakerLabel), el("span", "text", text));
+function setLevel(ev) {
+  $("meter-fill").style.transform = `scaleX(${pct(ev.db) / 100})`;
+  $("meter").classList.toggle("open", !!ev.open);
+  $("meter").setAttribute("aria-valuenow", String(Math.round(ev.db)));
+  if (typeof ev.threshold === "number") setGate(ev.threshold);
+}
+
+// ---- transcript ----
+
+function wakePrefix(text) {
+  const aliases = (state.wake_aliases && state.wake_aliases.length ? state.wake_aliases : ["murmur"])
+    .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const m = text.match(new RegExp(`^\\s*hey[\\s,]+(?:${aliases.join("|")})\\b[\\s,.!:]*`, "i"));
+  return m ? m[0].length : 0;
+}
+
+function addLine(text, kind) {
+  $("empty").classList.add("hidden");
+  const line = el("p", "line" + (kind ? " " + kind : ""));
+  const cut = kind ? 0 : wakePrefix(text);
+  if (cut) line.append(el("mark", null, text.slice(0, cut)), text.slice(cut));
+  else line.textContent = text;
   const box = $("transcript");
-  box.append(line);
+  box.insertBefore(line, $("partial"));
   box.scrollTop = box.scrollHeight;
 }
 
-function addCommand(ev) {
-  const key = ev.text;
-  let card = commandCards.get(key);
-  if (!card || ev.state === "sending") {
-    card = el("li", "cmd");
-    card.append(el("div", "body", ev.text), el("div", "state"));
-    $("commands").prepend(card);
-    commandCards.set(key, card);
-  }
-  card.className = "cmd " + (ev.state === "sent" ? "sent" : ev.state === "error" ? "error" : "");
-  const label = { sending: "Sending...", sent: "Sent", "dry-run": "Dry run", error: "Error" }[ev.state] || ev.state;
-  card.querySelector(".state").textContent = ev.detail ? `${label}: ${ev.detail}` : label;
+// ---- commands and replies ----
+
+function entry(kind, text) {
+  const li = el("li", "entry " + kind);
+  li.append(el("p", "entry-text", text));
+  $("log").prepend(li);
+  return li;
 }
 
-let ignoredWords = 0;
+function setState(li, stateName, detail) {
+  let tag = li.querySelector(".tag");
+  if (!tag) tag = li.appendChild(el("span"));
+  const [label, tone] = STATES[stateName] || [String(stateName || ""), ""];
+  tag.textContent = label;
+  tag.className = "tag" + (tone ? " " + tone : "");
+  li.title = detail || "";
+}
+
+function claimCleanup(li, ev) {
+  cleanups.delete(ev.raw);
+  cleanups.delete(ev.text);
+  if (!ev.error && ev.raw !== ev.text) li.querySelector(".entry-text").title = `Heard: ${ev.raw}`;
+}
+
+function onCommand(ev) {
+  let li = commandCards.get(ev.text);
+  if (!li || ev.state === "sending") {
+    li = entry("command", ev.text);
+    commandCards.set(ev.text, li);
+    const early = cleanups.get(ev.text);
+    if (early) claimCleanup(li, early);
+  }
+  setState(li, ev.state, ev.detail);
+}
+
+function onCleanup(ev) {
+  const li = commandCards.get(ev.raw) || commandCards.get(ev.text);
+  if (li) return claimCleanup(li, ev);
+  if (ev.raw) cleanups.set(ev.raw, ev);
+  if (ev.text) cleanups.set(ev.text, ev);
+}
+
+function onTyped(ev) {
+  let li = typedCards.get(ev.text);
+  if (!li) {
+    li = entry("typed", ev.text);
+    typedCards.set(ev.text, li);
+    // "type <text>" commands emit cleanup for the whole command, then typed for the text after "type"
+    const early = [...cleanups.values()].find((c) => c.text && c.text.endsWith(ev.text));
+    if (early) claimCleanup(li, early);
+  }
+  setState(li, ev.state, ev.detail);
+}
+
+function onReply(ev) {
+  const li = entry("reply", ev.text);
+  li.title = AGENTS[ev.from] || ev.from || "";
+  replyCards.set(ev.text.trim(), li); // the voice strips the text before it reports spoken
+}
+
+function onSpoken(ev) {
+  const li = replyCards.get(ev.text.trim());
+  if (!li) return;
+  li.classList.toggle("speaking", ev.state === "speaking");
+  if (ev.state === "error") li.title = `Could not read aloud: ${ev.detail || "error"}`;
+}
+
+// ---- events ----
 
 function handle(ev) {
   switch (ev.type) {
@@ -90,34 +177,37 @@ function handle(ev) {
       applyState(ev);
       break;
     case "level":
-      $("meter-fill").style.width = pct(ev.db) + "%";
-      $("meter-fill").classList.toggle("open", ev.open);
-      $("meter-label").textContent = `${Math.round(ev.db)} dB`;
-      $("meter-threshold").style.left = pct(ev.threshold) + "%";
+      setLevel(ev);
       break;
     case "partial":
       $("partial").textContent = ev.text;
       break;
     case "transcript":
       $("partial").textContent = "";
-      addTranscript(ev.text, "You");
+      addLine(ev.text);
       break;
     case "ignored":
       ignoredWords += ev.words;
       $("ignored").textContent = `Ignored ${ignoredWords} words from other voices.`;
       break;
     case "command":
-      addCommand(ev);
+      onCommand(ev);
       break;
-    case "reply": {
-      const card = el("li", "cmd reply");
-      card.append(el("div", "body", ev.text), el("div", "state", "Reply from Instinct"));
-      $("commands").prepend(card);
+    case "cleanup":
+      onCleanup(ev);
       break;
-    }
+    case "typed":
+      onTyped(ev);
+      break;
+    case "reply":
+      onReply(ev);
+      break;
+    case "spoken":
+      onSpoken(ev);
+      break;
     case "calibration":
       if (ev.state === "recording") {
-        $("cal-msg").textContent = ev.phase === "noise" ? "Stay quiet for 3 seconds..." : "Whisper normally for 3 seconds...";
+        $("cal-msg").textContent = ev.phase === "noise" ? "Stay quiet for 3 seconds..." : "Whisper for 3 seconds...";
       } else if (ev.state === "done") {
         $("cal-msg").textContent = ev.phase === "noise" ? "Room recorded. Now step 2." : `Gate set to ${ev.threshold} dB.`;
       } else {
@@ -127,11 +217,10 @@ function handle(ev) {
     case "note":
       $("cal-msg").textContent = ev.text;
       break;
-    case "error": {
-      const line = el("div", "err", `${ev.where}: ${ev.message}`);
-      $("transcript").append(line);
+    case "error":
+      addLine(`${ev.where}: ${ev.message}`, "err");
+      if (state.engine) $("engine").value = state.engine; // a refused engine switch leaves the menu on the old one
       break;
-    }
   }
 }
 
