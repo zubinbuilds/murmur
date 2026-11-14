@@ -7,14 +7,17 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import re
 import time
+import wave
 from difflib import SequenceMatcher
 from typing import Callable, Optional
 
 from . import gemini, typer
 from .agents import make_agent
-from .gate import GateSettings, WhisperGate, suggest_threshold
+from .config import RECORDINGS_DIR
+from .gate import FRAME_MS, SAMPLE_RATE, GateSettings, WhisperGate, suggest_threshold
 from .hub import Hub
 from .owner import OwnerFilter
 from .stt import STTError, make_engine
@@ -22,6 +25,9 @@ from .voice import make_voice
 from .wake import WakeGate
 
 CALIBRATION_FRAMES = 150  # 3 seconds
+GATE_STATS_FRAMES = 50  # one "gate" event a second
+# arrival_s: our clock since the WAV's first frame; wav_s: audio recorded by then; t, n: the kit's own
+MOTION_COLUMNS = ("arrival_s", "wav_s", "t", "n", "ax", "ay", "az")
 QUICK_CLOSE_S = 5.0  # a speech connection that closes sooner than this after opening is refused, not dropped
 CLEANUP_PROMPT = ("A speech recognizer transcribed this whispered command and may have misheard words. "
                   "Fix misheard words, spelling and punctuation. Do not answer it, explain it or add anything. "
@@ -57,11 +63,28 @@ class Pipeline:
         self._last_level = 0.0
         self._ignored = 0
         self._commands: set = set()  # running commands, held so a shielded task is not garbage-collected
+        self._recording: Optional[wave.Wave_write] = None
+        self._motion_file = None  # the .motion.csv beside the recording
+        self._motion_csv = None
+        self._recorded_frames = 0
+        self._record_t0: Optional[float] = None  # clock() at the WAV's first frame
 
     # ---- lifecycle ----
 
     async def start(self) -> None:
         await self.agent.start(self._on_reply, self._on_agent_error)
+        if self.cfg.record:
+            RECORDINGS_DIR.mkdir(exist_ok=True)
+            path = RECORDINGS_DIR / time.strftime("murmur-%Y%m%d-%H%M%S.wav")
+            self._recording = wave.open(str(path), "wb")
+            self._recording.setnchannels(1)
+            self._recording.setsampwidth(2)
+            self._recording.setframerate(SAMPLE_RATE)
+            self._motion_file = open(path.with_suffix(".motion.csv"), "w", newline="")
+            self._motion_csv = csv.writer(self._motion_file)
+            self._motion_csv.writerow(MOTION_COLUMNS)
+            print(f"Murmur: recording the raw band audio to {path}")
+            self.note(f"Recording the raw band audio to {path}")
         self.status()
 
     async def shutdown(self) -> None:
@@ -73,6 +96,11 @@ class Pipeline:
         await self.agent.stop()
         if self.voice:
             await self.voice.close()
+        if self._recording:
+            self._recording.close()  # writes the WAV header's final length
+            self._recording = None
+            self._motion_file.close()
+            self._motion_file = self._motion_csv = None
 
     def status(self) -> None:
         self.hub.emit({
@@ -107,7 +135,18 @@ class Pipeline:
     # ---- audio in ----
 
     async def on_pcm(self, frame: bytes) -> None:
+        if self._recording:
+            if self._record_t0 is None:
+                self._record_t0 = self.clock()
+            self._recording.writeframes(frame)
+            self._recorded_frames += 1
         out = self.gate.process(frame)
+        stats = self.gate.stats
+        if stats["frames"] >= GATE_STATS_FRAMES:
+            self.hub.emit({"type": "gate", "frames": stats["frames"], "above": stats["above"],
+                           "voiced": stats["voiced"], "passed": stats["passed"],
+                           "floor": round(self.gate.floor_db, 1), "threshold": round(self.gate.threshold, 1)})
+            stats.clear()
         if self._calibration is not None:
             self._collect(out.db)
         now = self.clock()
@@ -125,6 +164,15 @@ class Pipeline:
         except Exception as e:
             self.error("stt", f"Lost the speech connection: {e}")
             self._begin_reconnect(engine)
+
+    def on_motion(self, samples) -> None:
+        """Accelerometer events from the band (one kit Message or a list): recorded beside the audio, else unused."""
+        if self._motion_csv is None or self._record_t0 is None:
+            return  # nothing to line them up with before the first audio frame
+        arrival = round(self.clock() - self._record_t0, 4)
+        wav_s = round(self._recorded_frames * FRAME_MS / 1000, 3)
+        for s in [samples] if isinstance(samples, dict) else samples:
+            self._motion_csv.writerow([arrival, wav_s, s.get("t"), s.get("n"), s.get("ax"), s.get("ay"), s.get("az")])
 
     # ---- listening on/off, engine choice ----
 

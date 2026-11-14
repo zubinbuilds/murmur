@@ -7,9 +7,18 @@ place that talks to it. Close the kit's dashboard tab before starting the server
 from __future__ import annotations
 
 import asyncio
+import inspect
 import sys
+from collections import deque
 
 from .config import KIT_PYTHON, SAMPLE_SPEECH
+
+# Accelerometer rates (samples a second). The wearer's own speech shakes the band in the mouth; other
+# voices do not. Over Bluetooth, audio shares the link, and the kit's docs say to stay at 416 with one
+# sensor; USB carries up to 1666 with the accelerometer alone; firmware 1.0 has 100 with both sensors.
+MOTION_CAP = {"serial": 1666, "ble": 416}
+MOTION_RATE_FW10 = 100
+MOTION_BUFFER = 4096  # samples kept between audio frames, so a stalled audio stream cannot grow memory
 
 
 def _explain(error: Exception) -> str:
@@ -79,9 +88,16 @@ class BandSource:
                 self.pipeline.toggle_listening()))
             streams["events"] = True
         await band.configure(**streams)
-        self.pipeline.set_band_status("connected" if cfg.transport != "sim" else "simulated", band.name)
 
-        pump = asyncio.create_task(self._pump(queue))
+        motion: deque = deque(maxlen=MOTION_BUFFER)
+        on_motion = getattr(self.pipeline, "on_motion", None)
+        if on_motion is not None:
+            band.on("motion", motion.append)
+        about = await self._start_motion(band)
+        self.pipeline.set_band_status("connected" if cfg.transport != "sim" else "simulated",
+                                      f"{band.name}, {about}")
+
+        pump = asyncio.create_task(self._pump(queue, motion, on_motion))
         try:
             await gone.wait()
         finally:
@@ -89,8 +105,33 @@ class BandSource:
             await band.disconnect()
         self.pipeline.set_band_status("error", "The band disconnected.")
 
-    async def _pump(self, queue: asyncio.Queue) -> None:
+    async def _start_motion(self, band) -> str:
+        """Turns on the accelerometer next to audio; returns firmware, features and rate for the status line."""
+        info = band.info
+        features = list(info.features) if info is not None else []
+        about = f"firmware {info.firmware if info is not None else '?'} ({', '.join(features) or 'no 1.1 features'})"
+        if self.cfg.transport not in MOTION_CAP:  # the pretend band: motion stays off
+            return f"{about}, motion off"
+        try:
+            if "fast-motion" in features:
+                limits = await band.motion_limits()
+                rate = min(MOTION_CAP[self.cfg.transport], limits.accel or MOTION_CAP["ble"])
+                await band.configure(motion=rate, sensors="accel")
+                return f"{about}, motion {rate}/s accel"
+            await band.configure(motion=MOTION_RATE_FW10)
+            return f"{about}, motion {MOTION_RATE_FW10}/s both sensors"
+        except Exception as e:  # motion is a measurement aid; audio must keep working without it
+            self.pipeline.note(f"Motion is off, audio carries on: {_explain(e)}")
+            return f"{about}, motion off"
+
+    async def _pump(self, queue: asyncio.Queue, motion: deque, on_motion) -> None:
         while True:
             pcm = await queue.get()
             # The band sends 20 ms packets; a frame that is not exactly 20 ms is padded by the gate.
             await self.pipeline.on_pcm(pcm)
+            if motion and on_motion is not None:
+                batch = list(motion)  # the kit's motion Messages (t ms, ax ay az in g, n) since the last frame
+                motion.clear()
+                result = on_motion(batch)
+                if inspect.isawaitable(result):
+                    await result

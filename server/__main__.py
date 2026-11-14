@@ -22,6 +22,8 @@ def main() -> None:
     parser.add_argument("--no-band", action="store_true", help="serve the page only; do not connect to a band")
     parser.add_argument("--mic", nargs="?", const="", metavar="DEVICE",
                         help="listen on a Mac input instead of the band (default device if no name)")
+    parser.add_argument("--record", action="store_true",
+                        help="save the raw band audio (before the gate) as a WAV in recordings/")
     parser.add_argument("--usb", nargs="?", const="", metavar="PORT",
                         help="reach the band over its USB cable (the kit finds the port if no name)")
     args = parser.parse_args()
@@ -35,6 +37,8 @@ def main() -> None:
         pass
 
     cfg = Config.from_env()
+    if args.record:
+        cfg.record = True
     if args.sim:
         cfg.transport = "sim"
         cfg.whisper_only = False  # the kit's sample recording is a normal speaking voice

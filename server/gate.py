@@ -17,7 +17,7 @@ sure, still goes through.
 from __future__ import annotations
 
 import math
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -83,6 +83,7 @@ class WhisperGate:
         self.s = settings or GateSettings()
         self.floor_db = -70.0
         self._levels: deque = deque(maxlen=FLOOR_WINDOW_FRAMES)
+        self.stats: Counter = Counter()  # frames, above, voiced, passed; the pipeline reads and clears it
         self._delay: deque = deque()  # [frame, passed] pairs, oldest first
         self._open = False
         self._run = 0  # consecutive loud frames while closed
@@ -121,10 +122,13 @@ class WhisperGate:
         db = frame_db(frame)
         self._track_floor(db)
         loud = db > self.threshold
+        self.stats["frames"] += 1
+        self.stats["above"] += loud
         samples = np.frombuffer(frame, dtype=np.int16)
         if self.s.whisper_only and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK:
             loud = False
             frame = SILENCE
+            self.stats["voiced"] += 1
         self._prev = samples
         turn_end = False
         passed = False
@@ -155,6 +159,7 @@ class WhisperGate:
         if len(self._delay) > self._frames(self.s.preroll_ms):
             old, ok = self._delay.popleft()
             out = old if ok else SILENCE
+            self.stats["passed"] += out is not SILENCE
         return GateOutput(out, db, self._open, turn_end)
 
 
