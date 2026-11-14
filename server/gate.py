@@ -35,6 +35,12 @@ MIN_LAG, MAX_LAG = SAMPLE_RATE // 400, SAMPLE_RATE // 70  # pitch periods of a s
 VOICED_PEAK = 0.5
 FLOOR_WINDOW_FRAMES = 250  # 5 s of levels; their quietest tenth is the room, even mid-sentence
 FLOOR_WARMUP_FRAMES = 25  # 0.5 s: enough to use the floor at startup instead of holding the gate open for 5 s
+# Whisper mode, from the owner's band recording at 15:26: voicing, not level, separates their whisper from
+# talkers at the same volume. Loud unvoiced runs: whisper up to 380 ms, owner talking 160 ms, room 120 ms.
+WHISPER_MARGIN_DB = 6.0  # whisper 99% open, others and room 0% on that recording
+WHISPER_ONSET_MS = 200  # loud unvoiced in a row before a whisper turn opens; talk and room bursts are shorter
+WHISPER_PREROLL_MS = 300  # covers the 200 ms onset plus the first syllable before it
+VOICED_RUN_MS = 100  # 10% of real whisper frames score voiced alone; only a run this long is someone talking
 DIGITAL_SILENCE_DB = -85.0  # all-zero frames (dropouts, our own gated output) say nothing about the room
 
 
@@ -94,6 +100,7 @@ class WhisperGate:
         self._quiet = 0  # consecutive quiet frames while open
         self._open_frames = 0
         self._prev = np.zeros(FRAME_SAMPLES, dtype=np.int16)
+        self._voiced_run = 0  # consecutive voiced-scoring frames, whisper mode
 
     @property
     def is_open(self) -> bool:
@@ -103,7 +110,8 @@ class WhisperGate:
     def threshold(self) -> float:
         if self.s.calibrated:
             return self.s.threshold_db
-        return max(self.s.threshold_db, self.floor_db + self.s.margin_db)
+        margin = WHISPER_MARGIN_DB if self.s.whisper_only else self.s.margin_db
+        return max(self.s.threshold_db, self.floor_db + margin)
 
     def set_threshold(self, db: float) -> None:
         self.s.threshold_db = float(db)
@@ -132,11 +140,20 @@ class WhisperGate:
         self.stats["frames"] += 1
         self.stats["above"] += above
         samples = np.frombuffer(frame, dtype=np.int16)
-        if self.s.whisper_only and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK:
+        whisper = self.s.whisper_only
+        voiced = whisper and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK
+        self._prev = samples
+        self._voiced_run = self._voiced_run + 1 if voiced else 0
+        sustained = self._frames(VOICED_RUN_MS)
+        if self._voiced_run >= sustained:  # someone talking: silence the run back to its start, and it is quiet
+            if self._voiced_run == sustained:
+                # one frame more than the run: a frame's voicing window also covers the frame before it
+                for item in list(self._delay)[-sustained:]:
+                    item[0] = SILENCE
+                self.stats["voiced"] += sustained
             loud = False
             frame = SILENCE
             self.stats["voiced"] += 1
-        self._prev = samples
         turn_end = False
         passed = False
 
@@ -152,8 +169,8 @@ class WhisperGate:
                 self._open_frames = 0  # a very long turn: commit but stay open
                 turn_end = True
         else:
-            self._run = self._run + 1 if loud else 0
-            if self._run >= self._frames(self.s.onset_ms):
+            self._run = self._run + 1 if loud and not voiced else 0
+            if self._run >= self._frames(WHISPER_ONSET_MS if whisper else self.s.onset_ms):
                 self._open = True
                 self._quiet = 0
                 self._open_frames = self._run
@@ -163,7 +180,7 @@ class WhisperGate:
 
         self._delay.append([frame, passed])
         out = SILENCE
-        if len(self._delay) > self._frames(self.s.preroll_ms):
+        if len(self._delay) > self._frames(WHISPER_PREROLL_MS if whisper else self.s.preroll_ms):
             old, ok = self._delay.popleft()
             out = old if ok else SILENCE
             self.stats["passed"] += out is not SILENCE

@@ -64,10 +64,10 @@ class PipelineToggleTests(unittest.TestCase):
     def test_set_whisper_only_reaches_the_gate_and_the_status(self):
         hub = Hub()
         pipeline = Pipeline(Config(), hub, engine_factory=lambda n: None)
-        self.assertFalse(pipeline.gate.s.whisper_only)  # off by default since the 15:26 band recording
-        pipeline.set_whisper_only(True)
-        self.assertTrue(pipeline.gate.s.whisper_only)
-        self.assertTrue([e for e in hub.events if e["type"] == "status"][-1]["whisper_only"])
+        self.assertTrue(pipeline.gate.s.whisper_only)  # on by default
+        pipeline.set_whisper_only(False)
+        self.assertFalse(pipeline.gate.s.whisper_only)
+        self.assertFalse([e for e in hub.events if e["type"] == "status"][-1]["whisper_only"])
 
 
 if __name__ == "__main__":

@@ -26,6 +26,8 @@ def main() -> None:
                         help="motion: a turn needs the band's accelerometer to feel you speak (default off)")
     parser.add_argument("--record", action="store_true",
                         help="save the raw band audio (before the gate) as a WAV in recordings/")
+    parser.add_argument("--replay", metavar="WAV",
+                        help="play a recording (16 kHz mono 16 bit, as --record saves) once instead of the band")
     parser.add_argument("--usb", nargs="?", const="", metavar="PORT",
                         help="reach the band over its USB cable (the kit finds the port if no name)")
     args = parser.parse_args()
@@ -52,6 +54,9 @@ def main() -> None:
     if args.usb is not None:
         cfg.transport = "serial"
         cfg.serial_port = args.usb or cfg.serial_port
+    if args.replay:
+        cfg.transport = "replay"  # whisper_only stays as configured: a band recording is the real input
+        cfg.replay_path = args.replay
     if args.engine:
         cfg.stt = args.engine
     if args.band:

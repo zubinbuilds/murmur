@@ -61,12 +61,13 @@ class Config:
     port: int = 8000
     mic_device: str = ""  # input device name when transport is "mic"; empty means the system default
     serial_port: str = ""  # USB port when transport is "serial", e.g. /dev/cu.usbmodem101; empty lets the kit find the band
+    replay_path: str = ""  # WAV played in real time when transport is "replay" (--replay)
     agent: str = "instinct"  # instinct (texted over iMessage) | gemini (Gemini answers on this Mac)
     gemini_key: str = ""
     gemini_model: str = "gemini-4-hydrogen"
     cleanup: bool = True  # tidy each command with Gemini before acting on it, when a Gemini key is set
-    # drop voiced frames; off by default: on the owner's band 64% of loud frames scored voiced and lost words
-    whisper_only: bool = False
+    # whisper mode: keep the owner's whisper, drop people talking at the same volume (gate.py WHISPER_* constants)
+    whisper_only: bool = True
     record: bool = False  # write the raw band audio, before the gate, to recordings/ for analyze_recording.py
     own_voice: str = "off"  # off | motion (a turn needs the band's accelerometer to feel the wearer speaking)
     voice_device: str = ""  # output device that speaks replies aloud; empty means replies are not spoken
@@ -98,7 +99,7 @@ class Config:
             gemini_key=_get("GEMINI_API_KEY"),
             gemini_model=_get("GEMINI_MODEL", "gemini-4-hydrogen"),
             cleanup=_get("MURMUR_CLEANUP", "1").lower() not in ("0", "false", "no", "off"),
-            whisper_only=_get("MURMUR_WHISPER_ONLY", "0").lower() not in ("0", "false", "no", "off"),
+            whisper_only=_get("MURMUR_WHISPER_ONLY", "1").lower() not in ("0", "false", "no", "off"),
             record=_get("MURMUR_RECORD", "0").lower() not in ("0", "false", "no", "off"),
             own_voice=_get("MURMUR_OWN_VOICE", "off").lower(),
             voice_device=_get("MURMUR_VOICE_DEVICE"),

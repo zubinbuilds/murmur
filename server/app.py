@@ -13,6 +13,7 @@ from .config import WEB_DIR, Config
 from .hub import Hub
 from .mic_source import MicSource
 from .pipeline import Pipeline
+from .replay_source import ReplaySource
 from .stt import ENGINES
 
 
@@ -117,7 +118,7 @@ def build_app(cfg: Config, *, with_band: bool = True, engine_factory=None, agent
         hub.start()
         await pipeline.start()
         if with_band:
-            source = MicSource if cfg.transport == "mic" else BandSource
+            source = {"mic": MicSource, "replay": ReplaySource}.get(cfg.transport, BandSource)
             app[BAND] = asyncio.create_task(source(cfg, pipeline).run())
 
     async def on_cleanup(app: web.Application) -> None:

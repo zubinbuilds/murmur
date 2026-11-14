@@ -22,9 +22,15 @@ whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 
 Built and tested against the Vexo kit's pretend band, with a mock speech engine: 87 automated
 tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
-real ElevenLabs and Deepgram connections, the real band over Bluetooth, sending an iMessage,
+the real band over Bluetooth, sending an iMessage,
 and whether the whisper gate separates your whisper from loud music in a real room. See
 [What is unproven](#what-is-unproven).
+
+Run live on event day: the real band over USB, transcribed by Deepgram through Pipecat. All
+three speech engines and both voices (ElevenLabs, Deepgram) were also called live with recorded
+files, the voices into a silent output. Not run live: Gemini (no key), texting Instinct, typing
+into another app, spoken replies inside the app, and the band over Bluetooth (our one try did
+not find it).
 
 ## Quickstart
 
@@ -48,6 +54,12 @@ With the real band (number 82, so `Vexo-HACK-82`):
 4. Calibrate the gate (below), then press **Start**.
 
 The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
+
+With the band on its USB cable (the port name differs per Mac; find it with `ls /dev/cu.usbmodem*`):
+
+```bash
+.venv/bin/python -m server --usb /dev/cu.usbmodem101 --engine pipecat
+```
 
 Backup without the band, with a mic plugged into the Mac:
 
@@ -110,6 +122,8 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 - **Typing** (`server/typer.py`): "Hey Murmur, type ..." types into the app in front (needs Accessibility permission).
 - **Replies aloud** (`server/voice.py`): set `MURMUR_VOICE_DEVICE`; ElevenLabs or Deepgram through Pipecat (`MURMUR_TTS`).
 - **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
+- **Clear** (a button on the page): empties the transcript on every open page.
+- **Tuning on a real recording**: `--record` saves the raw band audio as a WAV in `recordings/`; `scripts/guided_recording.py [USB PORT]` runs a guided 40 s recording, and `scripts/analyze_recording.py WAV --segments ...` shows what the gate makes of it.
 - **Whispers only** (`server/gate.py`, `MURMUR_WHISPER_ONLY`, on by default, off with `--sim`, a switch in the page's Settings): drops voiced sound, like people talking normally nearby, before it reaches the speech service. A whisper has no pitch, so it gets through.
 
 ## Privacy and safety
@@ -148,7 +162,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
 ## What is unproven
 
 - **Live speech services.** The ElevenLabs and Deepgram message handling is tested against
-  messages copied from their docs, not against the live services. Two guesses to check first:
+  messages copied from their docs, and each engine ran live once on recorded files. Two guesses to check first:
   that ElevenLabs accepts a commit on a short chunk of silence, and that it keeps a session
   open while we stream silence between whispers.
 - **The gate in a loud room.** It assumes your whisper at the band mic is louder than the music.
@@ -162,7 +176,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
 - **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
   the teeth). Test these with the board unsealed, held against your back teeth.
 - **Whispers only** on real whispers, and while someone talks nearby: untested.
-- **Everything under "Also built"** and the Pipecat engine: tested against fakes only. With a
+- **Gemini, typing, spoken replies in the app and the mic backup**: tested against fakes only. With a
   Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs or Deepgram.
 
 ## Not built yet
