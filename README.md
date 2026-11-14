@@ -20,7 +20,7 @@ whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 
 ## Status
 
-Built and tested against the Vexo kit's pretend band, with a mock speech engine: 50 automated
+Built and tested against the Vexo kit's pretend band, with a mock speech engine: 87 automated
 tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
 real ElevenLabs and Deepgram connections, the real band over Bluetooth, sending an iMessage,
 and whether the whisper gate separates your whisper from loud music in a real room. See
@@ -28,7 +28,7 @@ and whether the whisper gate separates your whisper from loud music in a real ro
 
 ## Quickstart
 
-You need macOS and Python 3.9+. The page is plain HTML and works in any modern browser.
+You need macOS and Python 3.11+. The page is plain HTML and works in any modern browser.
 
 ```bash
 ./scripts/setup.sh          # clones the Vexo kit, makes .venv, installs dependencies, creates .env
@@ -48,6 +48,12 @@ With the real band (number 82, so `Vexo-HACK-82`):
 4. Calibrate the gate (below), then press **Start listening**.
 
 The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
+
+Backup without the band, with a mic plugged into the Mac:
+
+```bash
+.venv/bin/python -m server --mic DEVICE --engine pipecat
+```
 
 ## How it works
 
@@ -86,6 +92,7 @@ Add another by implementing `STTEngine` in `server/stt/base.py`.
 |---|---|---|---|
 | ElevenLabs | Scribe v3 Live (`scribe_v3_live`) | `diarize=true` | manual commit |
 | Deepgram | Nova-3 | `diarize=true` | `Finalize` message |
+| Pipecat (`pipecat`) | Deepgram Nova-3 through Pipecat | `diarize=True` | `Finalize` message |
 
 **Instinct** (`server/agents.py`, `server/imessage.py`). Instinct is texted, so the bridge sends an
 iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
@@ -95,6 +102,14 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
   nothing leaves your machine. Set it to `0` only when you mean it.
 - macOS asks once whether your terminal may control Messages. Reading replies needs Full
   Disk Access for your terminal.
+- Dry run stops only the iMessage. Gemini, typing and spoken replies still run.
+
+**Also built:**
+
+- **Gemini 4** (`server/gemini.py`): with `GEMINI_API_KEY`, tidies each command; `MURMUR_AGENT=gemini` answers it on the Mac instead of Instinct.
+- **Typing** (`server/typer.py`): "Hey Murmur, type ..." types into the app in front (needs Accessibility permission).
+- **Replies aloud** (`server/voice.py`): set `MURMUR_VOICE_DEVICE`; ElevenLabs or Deepgram through Pipecat (`MURMUR_TTS`).
+- **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
 
 ## Privacy and safety
 
@@ -145,10 +160,11 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
   common heuristic for newer macOS message storage.
 - **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
   the teeth). Test these with the board unsealed, held against your back teeth.
+- **Everything under "Also built"** and the Pipecat engine: tested against fakes only. With a
+  Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs or Deepgram.
 
 ## Not built yet
 
-- Streaming Instinct's reply back as speech or text in your ear.
 - Per-turn rather than time-window grouping of transcript pieces (`settle_s` in `config.py`).
 - A packaged installer. `scripts/setup.sh` is the whole setup.
 
