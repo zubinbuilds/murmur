@@ -20,7 +20,7 @@ whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 
 ## Status
 
-Built and tested against the Vexo kit's pretend band, with a mock speech engine: 87 automated
+Built and tested against the Vexo kit's pretend band, with a mock speech engine: 157 automated
 tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
 the real band over Bluetooth, sending an iMessage,
 and whether the whisper gate separates your whisper from loud music in a real room. See
@@ -51,7 +51,7 @@ With the real band (number 82, so `Vexo-HACK-82`):
 1. Close the Vexo dashboard tab if it is open. The band accepts one Bluetooth connection.
 2. **Double-tap the band** so it can be found for 60 seconds.
 3. `.venv/bin/python -m server --engine elevenlabs` (or `--engine deepgram`).
-4. Calibrate the gate (below), then press **Start**.
+4. Press **Start**. In voice mode, calibrate the gate (below) first; whisper mode does not need it.
 
 The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
 
@@ -75,7 +75,7 @@ Backup without the band, with a mic plugged into the Mac:
    far louder than a room does.
 2. **A level gate** (`server/gate.py`) drops everything below a threshold, 20 ms at a time. Gated
    audio is replaced with silence, not removed, so the speech service never hears it but the
-   stream keeps its timing and its connection. Calibrate it in the page: record the room
+   stream keeps its timing and its connection. In voice mode, calibrate it in the page: record the room
    for 3 s (with the music on if there will be music), then whisper for 3 s. It picks a
    threshold between them, and tells you if they are too close to separate.
 3. **Diarization plus an owner filter** (`server/owner.py`). The service labels speakers; the
@@ -86,7 +86,8 @@ Backup without the band, with a mic plugged into the Mac:
 **Turn detection** is the same state machine as the gate: a turn starts when the level stays
 above the threshold for 60 ms and ends after 700 ms of quiet (`MURMUR_TURN_SILENCE_MS`). At the
 end of a turn we tell the speech service to commit what it has heard. Output is delayed 200 ms
-so the first syllable is not clipped.
+so the first syllable is not clipped. (Those are voice mode's numbers; whisper mode waits
+200 ms and delays 300 ms.)
 
 **"Hey Murmur"** (`server/wake.py`). A turn must start with "Hey Murmur" (aliases in
 `MURMUR_WAKE_ALIASES`, for recognisers that mishear it). Everything after is the command.
@@ -124,7 +125,8 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 - **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
 - **Clear** (a button on the page): empties the transcript on every open page.
 - **Tuning on a real recording**: `--record` saves the raw band audio as a WAV in `recordings/`; `scripts/guided_recording.py [USB PORT]` runs a guided 40 s recording, and `scripts/analyze_recording.py WAV --segments ...` shows what the gate makes of it.
-- **Whispers only** (`server/gate.py`, `MURMUR_WHISPER_ONLY`, on by default, off with `--sim`, a switch in the page's Settings): drops voiced sound, like people talking normally nearby, before it reaches the speech service. A whisper has no pitch, so it gets through.
+- **Whisper mode** (`server/gate.py`, the default; `MURMUR_WHISPER_ONLY=0`, `--sim` or the page's Settings switch give voice mode): a whisper has no pitch, nearby talk does. A turn opens after 200 ms of loud unpitched sound (6 dB over the room), and 100 ms of pitch in a row is silenced. On one 40 s recording, one room, the gate was open for 99% of the owner's whisper and 0% of the person next to them, room chatter and the owner's normal voice. Voice mode (14 dB over the room) on the same recording: whisper 57%, normal voice 100%, the other person 0%, room 7%.
+- **Own-voice motion** (`MURMUR_OWN_VOICE`, off): we measured the band's accelerometer as an own-voice sensor on that recording. No frequency band separated the wearer's speech (the band moves all the time), so it stays off.
 
 ## Privacy and safety
 
@@ -175,7 +177,9 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
   common heuristic for newer macOS message storage.
 - **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
   the teeth). Test these with the board unsealed, held against your back teeth.
-- **Whispers only** on real whispers, and while someone talks nearby: untested.
+- **Whisper mode** is measured on one 40 s recording, one room. Crowds, music and someone else
+  whispering nearby are untested. Level calibration could not separate that room (the room's
+  loudest moments, p95 -19.3 dB, were louder than most of the whisper, p70 -20.8 dB).
 - **Gemini, typing, spoken replies in the app and the mic backup**: tested against fakes only. With a
   Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs or Deepgram.
 
