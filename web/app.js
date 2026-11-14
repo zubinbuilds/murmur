@@ -4,6 +4,8 @@ const $ = (id) => document.getElementById(id);
 let ws;
 let state = {};
 let ignoredWords = 0;
+let recalibrating = false; // the Settings link reopens the strip after a calibration
+let showingResult = false; // keeps the strip up briefly so the new gate level can be read
 const commandCards = new Map(); // command text -> entry
 const typedCards = new Map(); // typed text -> entry
 const replyCards = new Map(); // trimmed reply text -> entry
@@ -64,8 +66,29 @@ function applyState(s) {
   $("armed").classList.toggle("hidden", !state.armed);
   if (state.engine) $("engine").value = state.engine;
   $("whisper-only").checked = !!state.whisper_only;
-  $("owner").textContent = state.enrolling ? "Whisper now..." : state.owner ? `You are ${state.owner}` : "";
+  $("owner").textContent = state.enrolling ? "You: whisper now..." : `You: ${state.owner || "not set"}`;
+  renderCalib();
   if (typeof state.threshold === "number") setGate(state.threshold);
+}
+
+function renderCalib() {
+  $("calib").classList.toggle("hidden", !!state.calibrated && !recalibrating && !showingResult);
+}
+
+function onCalibration(ev) {
+  if (ev.state === "recording") {
+    $("cal-msg").textContent = ev.phase === "noise" ? "Stay quiet..." : "Whisper...";
+  } else if (ev.state === "done" && ev.phase === "noise") {
+    $("cal-msg").textContent = "Room recorded. Now step 2.";
+  } else if (ev.state === "done") {
+    $("cal-msg").textContent = `Done: gate at ${ev.threshold} dB.`;
+    recalibrating = false;
+    showingResult = true;
+    setTimeout(() => { showingResult = false; renderCalib(); }, 4000);
+  } else {
+    $("cal-msg").textContent = ev.message || "Calibration failed.";
+  }
+  renderCalib();
 }
 
 function setGate(db) {
@@ -207,16 +230,10 @@ function handle(ev) {
       onSpoken(ev);
       break;
     case "calibration":
-      if (ev.state === "recording") {
-        $("cal-msg").textContent = ev.phase === "noise" ? "Stay quiet for 3 seconds..." : "Whisper for 3 seconds...";
-      } else if (ev.state === "done") {
-        $("cal-msg").textContent = ev.phase === "noise" ? "Room recorded. Now step 2." : `Gate set to ${ev.threshold} dB.`;
-      } else {
-        $("cal-msg").textContent = ev.message || "Calibration failed.";
-      }
+      onCalibration(ev);
       break;
     case "note":
-      $("cal-msg").textContent = ev.text;
+      $("note").textContent = ev.text;
       break;
     case "error":
       addLine(`${ev.where}: ${ev.message}`, "err");
@@ -231,6 +248,11 @@ $("whisper-only").onchange = (e) => send({ cmd: "whisper_only", on: e.target.che
 $("cal-noise").onclick = () => send({ cmd: "calibrate", phase: "noise" });
 $("cal-whisper").onclick = () => send({ cmd: "calibrate", phase: "whisper" });
 $("enroll").onclick = () => send({ cmd: "enroll" });
+$("recal").onclick = () => {
+  recalibrating = true;
+  $("cal-msg").textContent = "";
+  renderCalib();
+};
 $("say-form").onsubmit = (e) => {
   e.preventDefault();
   const text = $("say-text").value.trim();

@@ -190,6 +190,23 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--accent
 .btn:hover { border-color: var(--muted); }
 .btn:active { transform: scale(0.98); }
 .btn.dark { background: var(--dark); color: var(--on-dark); border-color: var(--dark); }
+.owner { font: 12px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.calib {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--yellow-bg);
+  font-size: 13px;
+}
+.calib > span:first-child { font-weight: 600; color: var(--yellow); }
+.cal-msg { color: var(--muted); }
+.link { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; text-decoration: underline; cursor: pointer; width: max-content; }
+.link:hover { color: var(--ink); }
 .check { display: flex; align-items: center; gap: 8px; width: max-content; cursor: pointer; }
 .check input { margin: 0; accent-color: var(--accent); }
 .hint { margin: 0; color: var(--muted); }
