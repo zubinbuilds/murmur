@@ -36,9 +36,9 @@ class GateStatsTests(unittest.IsolatedAsyncioTestCase):
         return [e for e in hub.events if e["type"] == "gate"]
 
     async def test_one_event_a_second_with_every_count(self):
-        events = await self.feed(noise(-30, 2 * GATE_STATS_FRAMES + 10))
+        events = await self.feed(noise(-70, GATE_STATS_FRAMES) + noise(-30, GATE_STATS_FRAMES + 10))
         self.assertEqual(len(events), 2)
-        first = events[0]
+        first = events[1]  # the quiet second taught the floor; this one is all -30 dB
         self.assertEqual(set(first), {"type", "frames", "above", "voiced", "passed", "floor", "threshold",
                                       "body_active", "body_energy", "body_floor"})
         self.assertIsNone(first["body_active"])  # no motion arrived

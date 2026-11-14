@@ -34,6 +34,7 @@ MIN_LAG, MAX_LAG = SAMPLE_RATE // 400, SAMPLE_RATE // 70  # pitch periods of a s
 # frames in the kit's normal-voice sample score above it. A whisper has no pitch.
 VOICED_PEAK = 0.5
 FLOOR_WINDOW_FRAMES = 250  # 5 s of levels; their quietest tenth is the room, even mid-sentence
+FLOOR_WARMUP_FRAMES = 25  # 0.5 s: enough to use the floor at startup instead of holding the gate open for 5 s
 DIGITAL_SILENCE_DB = -85.0  # all-zero frames (dropouts, our own gated output) say nothing about the room
 
 
@@ -62,7 +63,9 @@ def voicing(window: np.ndarray) -> float:
 @dataclass
 class GateSettings:
     threshold_db: float = -45.0
-    margin_db: float = 10.0  # uncalibrated: also stay this far above the room's own noise floor
+    # uncalibrated: stay this far above the room's floor. 14 from the owner's band recording at 15:26:
+    # 10 let a nearby talker through, 18 began to clip the owner's own speech
+    margin_db: float = 14.0
     calibrated: bool = False  # True: use threshold_db as it is (set by the calibration steps)
     onset_ms: int = 60
     hangover_ms: int = 700
@@ -114,7 +117,7 @@ class WhisperGate:
         """Runs open or closed: a floor learned only while closed froze when a band's own noise held the gate open."""
         if db > DIGITAL_SILENCE_DB:
             self._levels.append(db)
-        if len(self._levels) == FLOOR_WINDOW_FRAMES:
+        if len(self._levels) >= FLOOR_WARMUP_FRAMES:
             self.floor_db = float(np.percentile(self._levels, 10))
 
     def process(self, frame: bytes, body: Optional[bool] = None) -> GateOutput:

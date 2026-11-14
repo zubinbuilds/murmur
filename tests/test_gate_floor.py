@@ -25,7 +25,7 @@ class BandFloorTests(unittest.TestCase):
             gate = WhisperGate(GateSettings(whisper_only=whisper_only))
             self.settle(gate)
             self.assertFalse(gate.is_open)
-            self.assertAlmostEqual(gate.threshold, -24, delta=1.5)
+            self.assertAlmostEqual(gate.threshold, -34 + GateSettings().margin_db, delta=1.5)
             outs = [gate.process(f) for f in frames(-15, 50, self.rng) + frames(-34, 60, self.rng)]
             self.assertEqual(sum(o.turn_end for o in outs), 1, whisper_only)
             self.assertFalse(gate.is_open)

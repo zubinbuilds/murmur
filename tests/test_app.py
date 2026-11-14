@@ -111,6 +111,23 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(KeyError):
             await handle_command(pipeline, {"cmd": "whisper_only"})
 
+    async def test_own_voice_mode_reaches_the_pipeline(self):
+        class FakePipeline:
+            def __init__(self):
+                self.modes = []
+
+            def set_own_voice(self, mode):
+                if mode not in ("off", "motion"):
+                    raise ValueError(mode)
+                self.modes.append(mode)
+
+        pipeline = FakePipeline()
+        await handle_command(pipeline, {"cmd": "own_voice", "mode": "motion"})
+        await handle_command(pipeline, {"cmd": "own_voice", "mode": "off"})
+        self.assertEqual(pipeline.modes, ["motion", "off"])
+        with self.assertRaises(ValueError):
+            await handle_command(pipeline, {"cmd": "own_voice", "mode": "loud"})
+
     def test_origin_rules(self):
         class Req:
             def __init__(self, origin):

@@ -87,6 +87,8 @@ async def handle_command(pipeline: Pipeline, data: dict) -> None:
         pipeline.enroll()
     elif cmd == "whisper_only":
         pipeline.set_whisper_only(bool(data["on"]))
+    elif cmd == "own_voice":
+        pipeline.set_own_voice(str(data["mode"]))
     elif cmd == "clear":
         pipeline.hub.clear()
     elif cmd == "say":

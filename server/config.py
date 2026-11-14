@@ -54,7 +54,7 @@ class Config:
     toggle_gesture: str = "double-tap"  # tap | double-tap | none
     tap_threshold: float = 1.2
     gate_threshold_db: float = -45.0
-    gate_margin_db: float = 10.0
+    gate_margin_db: float = 14.0
     turn_silence_ms: int = 700
     settle_s: float = 1.2  # wait this long after the last transcript piece before acting on a turn
     host: str = "127.0.0.1"
@@ -65,7 +65,8 @@ class Config:
     gemini_key: str = ""
     gemini_model: str = "gemini-4-hydrogen"
     cleanup: bool = True  # tidy each command with Gemini before acting on it, when a Gemini key is set
-    whisper_only: bool = True  # drop voiced frames, so people speaking aloud nearby never reach the speech service
+    # drop voiced frames; off by default: on the owner's band 64% of loud frames scored voiced and lost words
+    whisper_only: bool = False
     record: bool = False  # write the raw band audio, before the gate, to recordings/ for analyze_recording.py
     own_voice: str = "off"  # off | motion (a turn needs the band's accelerometer to feel the wearer speaking)
     voice_device: str = ""  # output device that speaks replies aloud; empty means replies are not spoken
@@ -89,7 +90,7 @@ class Config:
             toggle_gesture=_get("MURMUR_TOGGLE_GESTURE", "double-tap").lower(),
             tap_threshold=_num("MURMUR_TAP_THRESHOLD", 1.2),
             gate_threshold_db=_num("MURMUR_GATE_THRESHOLD_DB", -45.0),
-            gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 10.0),
+            gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 14.0),
             turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
             mic_device=_get("MURMUR_MIC_DEVICE"),
             serial_port=_get("MURMUR_SERIAL_PORT"),
@@ -97,7 +98,7 @@ class Config:
             gemini_key=_get("GEMINI_API_KEY"),
             gemini_model=_get("GEMINI_MODEL", "gemini-4-hydrogen"),
             cleanup=_get("MURMUR_CLEANUP", "1").lower() not in ("0", "false", "no", "off"),
-            whisper_only=_get("MURMUR_WHISPER_ONLY", "1").lower() not in ("0", "false", "no", "off"),
+            whisper_only=_get("MURMUR_WHISPER_ONLY", "0").lower() not in ("0", "false", "no", "off"),
             record=_get("MURMUR_RECORD", "0").lower() not in ("0", "false", "no", "off"),
             own_voice=_get("MURMUR_OWN_VOICE", "off").lower(),
             voice_device=_get("MURMUR_VOICE_DEVICE"),
