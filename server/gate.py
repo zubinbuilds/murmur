@@ -37,7 +37,7 @@ FLOOR_WINDOW_FRAMES = 250  # 5 s of levels; their quietest tenth is the room, ev
 FLOOR_WARMUP_FRAMES = 25  # 0.5 s: enough to use the floor at startup instead of holding the gate open for 5 s
 # Whisper mode, from the owner's band recording at 15:26: voicing, not level, separates their whisper from
 # talkers at the same volume. Loud unvoiced runs: whisper up to 380 ms, owner talking 160 ms, room 120 ms.
-WHISPER_MARGIN_DB = 6.0  # whisper 99% open, others and room 0% on that recording
+WHISPER_MARGIN_DB = 5.0  # sweep: 5 to 6 all 99/0/0/0; 4 leaks the owner's talk, 7 breaks the whisper, a softer whisper needs the room
 WHISPER_ONSET_MS = 200  # loud unvoiced in a row before a whisper turn opens; talk and room bursts are shorter
 WHISPER_PREROLL_MS = 300  # covers the 200 ms onset plus the first syllable before it
 VOICED_RUN_MS = 100  # 10% of real whisper frames score voiced alone; only a run this long is someone talking

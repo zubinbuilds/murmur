@@ -1,7 +1,8 @@
 """Plays a recorded band session (a 16 kHz mono 16 bit WAV, as --record saves) into the pipeline in real time.
 
 The same job as BandSource and MicSource, so one recording can be run through the gate and the speech
-service again and again. It plays once and stops.
+service again and again. It waits for Start, plays the file once from the beginning, and plays it again
+after the next Stop and Start. Stop in the middle stops the playback.
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from .band_source import _explain
 from .mic_source import FRAME_BYTES, RATE
 
 FRAME_S = FRAME_BYTES / 2 / RATE  # 20 ms
+POLL_S = 0.1  # how often to check for Start
+SILENCE = bytes(FRAME_BYTES)
 
 
 def read_frames(path: Path) -> list:
@@ -45,11 +48,22 @@ class ReplaySource:
             self.pipeline.error("replay", message)
             return
         clock = self.clock or asyncio.get_running_loop().time
-        self.pipeline.set_band_status("connected", f"replay: {path.name}")
-        start = clock()
-        for i, frame in enumerate(frames):
-            wait = start + i * FRAME_S - clock()  # absolute deadlines, so slow frames do not add up to drift
-            if wait > 0:
-                await self.sleep(wait)
-            await self.pipeline.on_pcm(frame)
-        self.pipeline.set_band_status("finished", "replay finished")
+        while True:
+            self.pipeline.set_band_status("connected", f"replay ready: {path.name}, press Start")
+            while not self.pipeline.listening:
+                await self.sleep(POLL_S)
+            self.pipeline.set_band_status("connected", f"replay: {path.name}")
+            start = clock()
+            for i, frame in enumerate(frames):
+                wait = start + i * FRAME_S - clock()  # absolute deadlines, so slow frames do not add up to drift
+                if wait > 0:
+                    await self.sleep(wait)
+                if not self.pipeline.listening:
+                    break  # Stop in the middle
+                await self.pipeline.on_pcm(frame)
+            else:
+                self.pipeline.set_band_status("finished", "replay finished")
+            while self.pipeline.listening:
+                # silence closes the last turn and keeps the speech connection fed until Stop
+                await self.pipeline.on_pcm(SILENCE)
+                await self.sleep(FRAME_S)
