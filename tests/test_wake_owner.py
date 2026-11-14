@@ -15,33 +15,33 @@ class Clock:
 class WakeTests(unittest.TestCase):
     def setUp(self):
         self.clock = Clock()
-        self.wake = WakeGate(("vocal", "vocals"), arm_seconds=8, clock=self.clock)
+        self.wake = WakeGate(("murmur", "murmurs"), arm_seconds=8, clock=self.clock)
 
     def test_prefix_with_command(self):
-        self.assertEqual(self.wake.feed("Hey Vocal, send an email to Sam."), "send an email to Sam.")
-        self.assertEqual(self.wake.feed("hey, vocal: what's on my calendar"), "what's on my calendar")
+        self.assertEqual(self.wake.feed("Hey Murmur, send an email to Sam."), "send an email to Sam.")
+        self.assertEqual(self.wake.feed("hey, murmur: what's on my calendar"), "what's on my calendar")
 
     def test_no_prefix_means_no_action(self):
         self.assertIsNone(self.wake.feed("send an email to Sam"))
-        self.assertIsNone(self.wake.feed("I told them hey vocal is the wake phrase"))
-        self.assertIsNone(self.wake.feed("hey vocalize this"))
+        self.assertIsNone(self.wake.feed("I told them hey murmur is the wake phrase"))
+        self.assertIsNone(self.wake.feed("hey murmuring this"))
         self.assertIsNone(self.wake.feed(""))
 
     def test_wake_phrase_alone_arms_the_next_turn(self):
-        self.assertIsNone(self.wake.feed("Hey Vocal."))
+        self.assertIsNone(self.wake.feed("Hey Murmur."))
         self.assertTrue(self.wake.armed)
         self.assertEqual(self.wake.feed("book a table for two"), "book a table for two")
         self.assertFalse(self.wake.armed)
         self.assertIsNone(self.wake.feed("and something else"))
 
     def test_armed_state_times_out(self):
-        self.wake.feed("hey vocal")
+        self.wake.feed("hey murmur")
         self.clock.t += 9
         self.assertFalse(self.wake.armed)
         self.assertIsNone(self.wake.feed("book a table"))
 
     def test_aliases(self):
-        wake = WakeGate(("vocal", "local"), clock=self.clock)
+        wake = WakeGate(("murmur", "local"), clock=self.clock)
         self.assertEqual(wake.feed("hey local, play something"), "play something")
 
 

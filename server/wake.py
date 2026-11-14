@@ -1,4 +1,4 @@
-"""The "Hey Vocal" prefix. Nothing is sent to the agent unless a turn starts with it."""
+"""The "Hey Murmur" prefix. Nothing is sent to the agent unless a turn starts with it."""
 
 from __future__ import annotations
 
@@ -10,13 +10,13 @@ from typing import Callable, Iterable, Optional
 class WakeGate:
     """feed(text) returns the command to run, or None.
 
-    "Hey Vocal, email Sam" runs "email Sam". Saying just "Hey Vocal" arms the gate: the next
+    "Hey Murmur, email Sam" runs "email Sam". Saying just "Hey Murmur" arms the gate: the next
     turn within `arm_seconds` is taken as the command, so you can pause after the wake phrase.
     """
 
-    def __init__(self, aliases: Iterable[str] = ("vocal", "vocals"), arm_seconds: float = 8.0,
+    def __init__(self, aliases: Iterable[str] = ("murmur", "murmurs", "murmer"), arm_seconds: float = 8.0,
                  clock: Callable[[], float] = time.monotonic) -> None:
-        names = "|".join(re.escape(a.strip()) for a in aliases if a.strip()) or "vocal"
+        names = "|".join(re.escape(a.strip()) for a in aliases if a.strip()) or "murmur"
         self._pattern = re.compile(rf"^\W*hey\W+(?:{names})\b\W*(?P<rest>.*)$", re.IGNORECASE | re.DOTALL)
         self.arm_seconds = arm_seconds
         self._clock = clock

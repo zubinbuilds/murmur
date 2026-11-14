@@ -1,10 +1,10 @@
-# Vocal
+# Murmur
 
 Whisper to your AI agent from a retainer-sized Bluetooth microphone in your mouth.
 
 You whisper. A tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's firmware) streams
 the sound to your laptop. A localhost web app shows a live transcript of **only your
-whispers**, and when a turn starts with **"Hey Vocal"** it texts the rest to
+whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 [Instinct](https://instinct.com), an agent with a computer that you talk to over iMessage.
 
 ```
@@ -13,7 +13,7 @@ whispers**, and when a turn starts with **"Hey Vocal"** it texts the rest to
                                                         v3 Live or Deepgram
                                                         (both diarize)
                                                                 │
-        Instinct ◀──iMessage── "Hey Vocal" check ◀── turn assembly ◀┘
+        Instinct ◀──iMessage── "Hey Murmur" check ◀── turn assembly ◀┘
            │                                             │
            └──── replies read back ──▶ localhost web UI ◀┘
 ```
@@ -37,7 +37,7 @@ open .env                   # paste ELEVENLABS_API_KEY and/or DEEPGRAM_API_KEY
 ```
 
 Open <http://127.0.0.1:8000>. Press **Start listening**: the pretend band replays a recording,
-and the mock engine shows a placeholder transcript. Type `Hey Vocal, email Sam I'm late` into
+and the mock engine shows a placeholder transcript. Type `Hey Murmur, email Sam I'm late` into
 "Test without speaking" to see the agent path (it only shows what it would send).
 
 With the real band (number 82, so `Vexo-HACK-82`):
@@ -47,7 +47,7 @@ With the real band (number 82, so `Vexo-HACK-82`):
 3. `.venv/bin/python -m server --engine elevenlabs` (or `--engine deepgram`).
 4. Calibrate the gate (below), then press **Start listening**.
 
-The band's number is `VOCAL_BAND` in `.env`. The engine can also be switched in the page.
+The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
 
 ## How it works
 
@@ -66,18 +66,18 @@ The band's number is `VOCAL_BAND` in `.env`. The engine can also be switched in 
    them.
 
 **Turn detection** is the same state machine as the gate: a turn starts when the level stays
-above the threshold for 60 ms and ends after 700 ms of quiet (`VOCAL_TURN_SILENCE_MS`). At the
+above the threshold for 60 ms and ends after 700 ms of quiet (`MURMUR_TURN_SILENCE_MS`). At the
 end of a turn we tell the speech service to commit what it has heard. Output is delayed 200 ms
 so the first syllable is not clipped.
 
-**"Hey Vocal"** (`server/wake.py`). A turn must start with "Hey Vocal" (aliases in
-`VOCAL_WAKE_ALIASES`, for recognisers that mishear it). Everything after is the command.
-Saying only "Hey Vocal" arms the next turn for 8 s, so you can pause. Nothing else is ever
+**"Hey Murmur"** (`server/wake.py`). A turn must start with "Hey Murmur" (aliases in
+`MURMUR_WAKE_ALIASES`, for recognisers that mishear it). Everything after is the command.
+Saying only "Hey Murmur" arms the next turn for 8 s, so you can pause. Nothing else is ever
 sent anywhere.
 
 **Toggling listening.** A double tap on the band (its motion sensor) toggles listening. Change
-the gesture with `VOCAL_TOGGLE_GESTURE`. Whether a tap on a cheek-mounted board registers is
-untested; `VOCAL_TAP_THRESHOLD` sets the sensitivity.
+the gesture with `MURMUR_TOGGLE_GESTURE`. Whether a tap on a cheek-mounted board registers is
+untested; `MURMUR_TAP_THRESHOLD` sets the sensitivity.
 
 **Speech engines** (`server/stt/`). Both stream 16 kHz PCM and return word-level speaker labels.
 Add another by implementing `STTEngine` in `server/stt/base.py`.
@@ -91,7 +91,7 @@ Add another by implementing `STTEngine` in `server/stt/base.py`.
 iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 
 - Set `INSTINCT_IMESSAGE_TO` to the number (like `+15551234567`) or Apple ID email you text.
-- **Dry run is on by default** (`VOCAL_DRY_RUN=1`): the page shows what would be sent and
+- **Dry run is on by default** (`MURMUR_DRY_RUN=1`): the page shows what would be sent and
   nothing leaves your machine. Set it to `0` only when you mean it.
 - macOS asks once whether your terminal may control Messages. Reading replies needs Full
   Disk Access for your terminal.
@@ -102,7 +102,7 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
   gated stream is sent, but the mic can pick up people near you.
 - Keys live in `.env`, which is git-ignored. Never commit it.
 - The page only accepts WebSocket connections from its own origin, so another website open in
-  your browser cannot make Vocal send messages.
+  your browser cannot make Murmur send messages.
 - The band's firmware lights its LED blue while the mic is on, and the kit cannot turn that
   off. Inside a retainer it is hidden. Tell people near you that you are recording.
 - **Hardware in your mouth:** test everything unsealed first. Never charge the battery while it
@@ -116,7 +116,7 @@ server/            Python app (aiohttp)
   gate.py          whisper gate + turn detection + calibration
   stt/             ElevenLabs, Deepgram, and a mock engine
   owner.py         "which speaker is me"
-  wake.py          the "Hey Vocal" prefix
+  wake.py          the "Hey Murmur" prefix
   pipeline.py      band audio in → agent out
   band_source.py   talks to the band through the Vexo kit
   imessage.py      send and read iMessages

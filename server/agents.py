@@ -1,4 +1,4 @@
-"""Where a "Hey Vocal" command goes. Instinct is an agent you text, so the real agent is iMessage."""
+"""Where a "Hey Murmur" command goes. Instinct is an agent you text, so the real agent is iMessage."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class AgentResult:
 class DryRunAgent:
     """Shows what would be sent and sends nothing. The default."""
 
-    def __init__(self, reason: str = "dry run is on (VOCAL_DRY_RUN=1)") -> None:
+    def __init__(self, reason: str = "dry run is on (MURMUR_DRY_RUN=1)") -> None:
         self.reason = reason
 
     async def start(self, on_reply: Callable[[str], None], on_error: Callable[[str], None]) -> None:

@@ -47,7 +47,7 @@ class Config:
     deepgram_key: str = ""
     instinct_to: str = ""
     dry_run: bool = True
-    wake_aliases: tuple = ("vocal", "vocals")
+    wake_aliases: tuple = ("murmur", "murmurs", "murmer")
     mic_gain_db: float = 20.0
     toggle_gesture: str = "double-tap"  # tap | double-tap | none
     tap_threshold: float = 1.2
@@ -61,20 +61,20 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         load_dotenv()
-        aliases = tuple(a.strip().lower() for a in _get("VOCAL_WAKE_ALIASES", "vocal,vocals").split(",") if a.strip())
+        aliases = tuple(a.strip().lower() for a in _get("MURMUR_WAKE_ALIASES", "murmur,murmurs,murmer").split(",") if a.strip())
         return cls(
-            band_number=_num("VOCAL_BAND", 82, int),
-            transport=_get("VOCAL_TRANSPORT", "ble").lower(),
-            stt=_get("VOCAL_STT", "elevenlabs").lower(),
+            band_number=_num("MURMUR_BAND", 82, int),
+            transport=_get("MURMUR_TRANSPORT", "ble").lower(),
+            stt=_get("MURMUR_STT", "elevenlabs").lower(),
             elevenlabs_key=_get("ELEVENLABS_API_KEY"),
             deepgram_key=_get("DEEPGRAM_API_KEY"),
             instinct_to=_get("INSTINCT_IMESSAGE_TO"),
-            dry_run=_get("VOCAL_DRY_RUN", "1").lower() not in ("0", "false", "no", "off"),
-            wake_aliases=aliases or ("vocal",),
-            mic_gain_db=_num("VOCAL_MIC_GAIN_DB", 20.0),
-            toggle_gesture=_get("VOCAL_TOGGLE_GESTURE", "double-tap").lower(),
-            tap_threshold=_num("VOCAL_TAP_THRESHOLD", 1.2),
-            gate_threshold_db=_num("VOCAL_GATE_THRESHOLD_DB", -45.0),
-            gate_margin_db=_num("VOCAL_GATE_MARGIN_DB", 10.0),
-            turn_silence_ms=_num("VOCAL_TURN_SILENCE_MS", 700, int),
+            dry_run=_get("MURMUR_DRY_RUN", "1").lower() not in ("0", "false", "no", "off"),
+            wake_aliases=aliases or ("murmur",),
+            mic_gain_db=_num("MURMUR_MIC_GAIN_DB", 20.0),
+            toggle_gesture=_get("MURMUR_TOGGLE_GESTURE", "double-tap").lower(),
+            tap_threshold=_num("MURMUR_TAP_THRESHOLD", 1.2),
+            gate_threshold_db=_num("MURMUR_GATE_THRESHOLD_DB", -45.0),
+            gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 10.0),
+            turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
         )

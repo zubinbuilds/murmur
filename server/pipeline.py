@@ -1,7 +1,7 @@
 """The whole path from microphone frames to an action on your behalf.
 
     band PCM -> whisper gate (+turn detection) -> speech engine (diarized)
-             -> owner filter (only you) -> turn assembly -> "Hey Vocal" check -> agent
+             -> owner filter (only you) -> turn assembly -> "Hey Murmur" check -> agent
 """
 
 from __future__ import annotations

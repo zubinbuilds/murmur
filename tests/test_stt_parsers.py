@@ -38,16 +38,16 @@ class ElevenLabsParserTests(unittest.TestCase):
 
 class DeepgramParserTests(unittest.TestCase):
     RESULT = {"type": "Results", "is_final": True, "channel": {"alternatives": [{
-        "transcript": "hey vocal send it",
+        "transcript": "hey murmur send it",
         "words": [{"word": "hey", "punctuated_word": "Hey", "speaker": 0},
-                  {"word": "vocal", "punctuated_word": "Vocal,", "speaker": 0},
+                  {"word": "murmur", "punctuated_word": "Murmur,", "speaker": 0},
                   {"word": "send", "speaker": 1}]}]}}
 
     def test_final_result_with_speakers(self):
         ev = deepgram(self.RESULT)
         self.assertEqual(ev[0]["type"], "final")
         self.assertEqual([w["speaker"] for w in ev[0]["words"]], ["speaker_0", "speaker_0", "speaker_1"])
-        self.assertEqual(ev[0]["words"][1]["text"], "Vocal,")
+        self.assertEqual(ev[0]["words"][1]["text"], "Murmur,")
 
     def test_interim_result_is_partial(self):
         self.assertEqual(deepgram({**self.RESULT, "is_final": False})[0]["type"], "partial")

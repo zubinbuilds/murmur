@@ -24,7 +24,7 @@ BAND = web.AppKey("band", asyncio.Task)
 def origin_allowed(request: web.Request, port: int) -> bool:
     """Only pages served by this server may drive it.
 
-    Without this, any website you have open could connect to ws://localhost and make Vocal
+    Without this, any website you have open could connect to ws://localhost and make Murmur
     send messages for you. Browsers always send Origin on WebSocket connections.
     """
     origin = request.headers.get("Origin")

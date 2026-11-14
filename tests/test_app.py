@@ -55,7 +55,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         await self.start(with_band=False)
         ws = await self.client.ws_connect("/ws")
         await next_event(ws, "hello")
-        await ws.send_json({"cmd": "say", "text": "Hey Vocal, email Sam I am late"})
+        await ws.send_json({"cmd": "say", "text": "Hey Murmur, email Sam I am late"})
         command = await next_event(ws, "command")
         self.assertEqual(command["text"], "email Sam I am late")
         final = await next_event(ws, "command")

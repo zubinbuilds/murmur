@@ -14,7 +14,7 @@ from .stt import ENGINES
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m server", description=__doc__)
     parser.add_argument("--sim", action="store_true", help="use the kit's pretend band (no hardware)")
-    parser.add_argument("--engine", choices=ENGINES, help="speech engine (default: VOCAL_STT from .env)")
+    parser.add_argument("--engine", choices=ENGINES, help="speech engine (default: MURMUR_STT from .env)")
     parser.add_argument("--band", type=int, help="band number, e.g. 82 for Vexo-HACK-82")
     parser.add_argument("--port", type=int, help="port for the web page (default 8000)")
     parser.add_argument("--no-band", action="store_true", help="serve the page only; do not connect to a band")
@@ -30,7 +30,7 @@ def main() -> None:
     if args.port:
         cfg.port = args.port
 
-    print(f"Vocal: open http://{cfg.host}:{cfg.port}")
+    print(f"Murmur: open http://{cfg.host}:{cfg.port}")
     print(f"  band {cfg.band_number} ({cfg.transport}), speech: {cfg.stt}, "
           f"{'DRY RUN: nothing will be sent' if cfg.dry_run else 'LIVE: commands are texted to Instinct'}")
     web.run_app(build_app(cfg, with_band=not args.no_band), host=cfg.host, port=cfg.port, print=None)
