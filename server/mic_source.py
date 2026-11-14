@@ -10,6 +10,7 @@ from .band_source import _explain
 
 RATE = 16000
 FRAME_BYTES = 640  # 20 ms at 16 kHz, int16
+RETRY_S = 4.0
 
 
 class Resampler:
@@ -59,15 +60,19 @@ class MicSource:
 
     async def run(self) -> None:
         """Open the mic, stream, and start again if it fails."""
+        last = None
         while True:
             try:
                 await self._session()
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self.pipeline.set_band_status("error", _explain(e))
-                self.pipeline.error("mic", _explain(e))
-                await asyncio.sleep(4)
+                message = _explain(e)
+                self.pipeline.set_band_status("error", message)
+                if message != last:  # the status line keeps showing it; the page log gets each new error once
+                    self.pipeline.error("mic", message)
+                last = message
+                await asyncio.sleep(RETRY_S)
 
     async def _session(self) -> None:
         sd = self.sd

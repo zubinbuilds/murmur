@@ -32,7 +32,7 @@ class PipecatDeepgramSTT(STTEngine):
         if not self.api_key:
             raise STTError("DEEPGRAM_API_KEY is not set. Put it in .env.")
         from pipecat.pipeline.pipeline import Pipeline
-        from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+        from pipecat.pipeline.worker import PipelineParams, PipelineWorker, ProcessorUnusablePolicy
         from pipecat.workers.runner import WorkerRunner
 
         self._on_event = on_event
@@ -42,11 +42,15 @@ class PipecatDeepgramSTT(STTEngine):
             Pipeline([self._make_service(self.api_key), _collector(on_event)]),
             params=PipelineParams(audio_in_sample_rate=RATE),
             idle_timeout_secs=None,
+            processor_unusable_policy=ProcessorUnusablePolicy.END,  # a rejected key ends the run, so we report "closed"
         )
 
         @self._worker.event_handler("on_pipeline_error")
         async def _on_error(worker, frame):
-            await on_event({"type": "error", "message": f"Deepgram (Pipecat): {frame.error}"})
+            message = f"Deepgram (Pipecat): {frame.error}"
+            if "(status 401)" in message or "(status 403)" in message:  # the SDK's text is a dump of request headers
+                message = "Deepgram refused DEEPGRAM_API_KEY. Check it with: .venv/bin/python scripts/check_keys.py"
+            await on_event({"type": "error", "message": message})
 
         runner = WorkerRunner(handle_sigint=False)  # the server owns Ctrl+C
         await runner.add_workers(self._worker)

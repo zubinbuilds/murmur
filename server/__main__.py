@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from aiohttp import web
@@ -21,6 +22,8 @@ def main() -> None:
     parser.add_argument("--no-band", action="store_true", help="serve the page only; do not connect to a band")
     parser.add_argument("--mic", nargs="?", const="", metavar="DEVICE",
                         help="listen on a Mac input instead of the band (default device if no name)")
+    parser.add_argument("--usb", nargs="?", const="", metavar="PORT",
+                        help="reach the band over its USB cable (the kit finds the port if no name)")
     args = parser.parse_args()
 
     try:  # Pipecat logs every frame at DEBUG through loguru; keep the terminal readable
@@ -38,6 +41,9 @@ def main() -> None:
     if args.mic is not None:
         cfg.transport = "mic"
         cfg.mic_device = args.mic or cfg.mic_device
+    if args.usb is not None:
+        cfg.transport = "serial"
+        cfg.serial_port = args.usb or cfg.serial_port
     if args.engine:
         cfg.stt = args.engine
     if args.band:
@@ -49,6 +55,11 @@ def main() -> None:
     print(f"  band {cfg.band_number} ({cfg.transport}), speech: {cfg.stt}, "
           f"{'DRY RUN: nothing will be sent' if cfg.dry_run else 'LIVE: commands are texted to Instinct'}")
     web.run_app(build_app(cfg, with_band=not args.no_band), host=cfg.host, port=cfg.port, print=None)
+    # run_app has cleaned up; a worker thread stuck in a network call (Gemini, the voice list) would otherwise
+    # hold the exit for up to 15 s, because Python joins those threads at exit
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

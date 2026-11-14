@@ -22,6 +22,7 @@ from .voice import make_voice
 from .wake import WakeGate
 
 CALIBRATION_FRAMES = 150  # 3 seconds
+QUICK_CLOSE_S = 5.0  # a speech connection that closes sooner than this after opening is refused, not dropped
 CLEANUP_PROMPT = ("A speech recognizer transcribed this whispered command and may have misheard words. "
                   "Fix misheard words, spelling and punctuation. Do not answer it, explain it or add anything. "
                   "Reply with the corrected command only.\n\nCommand: ")
@@ -50,6 +51,7 @@ class Pipeline:
         self._pending: list = []
         self._flush_task: Optional[asyncio.Task] = None
         self._reconnect_task: Optional[asyncio.Task] = None
+        self._engine_started = 0.0
         self._calibration: Optional[dict] = None
         self._noise_dbs: list = []
         self._last_level = 0.0
@@ -159,6 +161,7 @@ class Pipeline:
             self.engine = engine  # set first: the engine may report "ready" before start() returns
             self.owner.reset()  # speaker ids restart with every speech session
             await engine.start(lambda ev, e=engine: self._on_stt_event(ev, e))
+            self._engine_started = self.clock()
             return True
         except STTError as e:
             self.engine = None
@@ -190,6 +193,12 @@ class Pipeline:
             await dead.stop()
         except Exception:
             pass
+        if self.clock() - self._engine_started < QUICK_CLOSE_S:  # refused as it opened: a bad key, not a dropped line
+            self.listening = False
+            self.error("stt", "The speech service closed the connection as soon as it opened "
+                              "(see the error above). Listening is off.")
+            self.status()
+            return
         for attempt in range(1, 6):
             await asyncio.sleep(1.5 * attempt)
             if not self.listening:

@@ -32,6 +32,8 @@ MIN_LAG, MAX_LAG = SAMPLE_RATE // 400, SAMPLE_RATE // 70  # pitch periods of a s
 # score 0.89 or more, white and lightly filtered noise 0.23 or less (95th percentile), and 75% of the loud
 # frames in the kit's normal-voice sample score above it. A whisper has no pitch.
 VOICED_PEAK = 0.5
+FLOOR_WINDOW_FRAMES = 250  # 5 s of levels; their quietest tenth is the room, even mid-sentence
+DIGITAL_SILENCE_DB = -85.0  # all-zero frames (dropouts, our own gated output) say nothing about the room
 
 
 def frame_db(frame: bytes) -> float:
@@ -80,6 +82,7 @@ class WhisperGate:
     def __init__(self, settings: GateSettings | None = None) -> None:
         self.s = settings or GateSettings()
         self.floor_db = -70.0
+        self._levels: deque = deque(maxlen=FLOOR_WINDOW_FRAMES)
         self._delay: deque = deque()  # [frame, passed] pairs, oldest first
         self._open = False
         self._run = 0  # consecutive loud frames while closed
@@ -105,14 +108,18 @@ class WhisperGate:
     def _frames(ms: int) -> int:
         return max(1, round(ms / FRAME_MS))
 
-    def _adapt_floor(self, db: float) -> None:
-        rate = 0.2 if db < self.floor_db else 0.002
-        self.floor_db += rate * (db - self.floor_db)
+    def _track_floor(self, db: float) -> None:
+        """Runs open or closed: a floor learned only while closed froze when a band's own noise held the gate open."""
+        if db > DIGITAL_SILENCE_DB:
+            self._levels.append(db)
+        if len(self._levels) == FLOOR_WINDOW_FRAMES:
+            self.floor_db = float(np.percentile(self._levels, 10))
 
     def process(self, frame: bytes) -> GateOutput:
         if len(frame) != FRAME_BYTES:
             frame = (frame + SILENCE)[:FRAME_BYTES]
         db = frame_db(frame)
+        self._track_floor(db)
         loud = db > self.threshold
         samples = np.frombuffer(frame, dtype=np.int16)
         if self.s.whisper_only and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK:
@@ -134,7 +141,6 @@ class WhisperGate:
                 self._open_frames = 0  # a very long turn: commit but stay open
                 turn_end = True
         else:
-            self._adapt_floor(db)
             self._run = self._run + 1 if loud else 0
             if self._run >= self._frames(self.s.onset_ms):
                 self._open = True

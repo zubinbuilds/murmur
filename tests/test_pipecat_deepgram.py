@@ -95,6 +95,34 @@ class PipecatDeepgramTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("bad key", errors[0]["message"])
 
+    async def test_a_rejected_key_ends_the_run_with_a_plain_message_and_closed(self):
+        class RejectingDeepgram(FakeDeepgram):
+            async def process_frame(self, frame, direction):
+                await FrameProcessor.process_frame(self, frame, direction)
+                if isinstance(frame, InputAudioRawFrame):
+                    await self.push_error("Deepgram rejected the connection (status 401): headers: {...}",
+                                          force_treat_as_permanent=True)
+                    return
+                await self.push_frame(frame, direction)
+
+        events = []
+
+        async def on_event(ev):
+            events.append(ev)
+
+        engine = PipecatDeepgramSTT("placeholder", make_service=lambda key: RejectingDeepgram())
+        await engine.start(on_event)
+        await engine.send_audio(bytes(640))
+        for _ in range(100):
+            if any(e["type"] == "closed" for e in events):
+                break
+            await asyncio.sleep(0.02)
+        await engine.stop()
+        errors = [e["message"] for e in events if e["type"] == "error"]
+        self.assertEqual(errors, ["Deepgram refused DEEPGRAM_API_KEY. Check it with: "
+                                  ".venv/bin/python scripts/check_keys.py"])
+        self.assertIn("closed", [e["type"] for e in events])
+
     async def test_missing_key_says_how_to_fix_it(self):
         engine = make_engine("pipecat", SimpleNamespace(deepgram_key=""))
         self.assertIsInstance(engine, PipecatDeepgramSTT)

@@ -23,14 +23,18 @@ class BandSource:
 
     async def run(self) -> None:
         """Connect, stream, and start again if the band goes away."""
+        last = None
         while True:
             try:
                 await self._session()
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self.pipeline.set_band_status("error", _explain(e))
-                self.pipeline.error("band", _explain(e))
+                message = _explain(e)
+                self.pipeline.set_band_status("error", message)
+                if message != last:  # the status line keeps showing it; the page log gets each new error once
+                    self.pipeline.error("band", message)
+                last = message
                 await asyncio.sleep(4)
 
     async def _session(self) -> None:
@@ -48,6 +52,8 @@ class BandSource:
         options = {}
         if cfg.transport == "sim":
             options["audio_packets"] = audio.ogg_packets(SAMPLE_SPEECH)
+        elif cfg.transport == "serial" and cfg.serial_port:
+            options["port"] = cfg.serial_port
         band = await Band.connect(cfg.band_number, transport=cfg.transport, auto_reconnect=True, **options)
         decoder = await asyncio.to_thread(audio.PcmDecoder)  # the first one takes a few seconds
 

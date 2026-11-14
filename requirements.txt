@@ -3,4 +3,5 @@ numpy>=1.26
 av>=12
 bleak>=0.22
 sounddevice>=0.5
+pyserial>=3.5
 pipecat-ai[deepgram,elevenlabs]==1.16.0

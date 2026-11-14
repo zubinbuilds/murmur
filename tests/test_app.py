@@ -51,6 +51,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         for path in ("/", "/static/app.js", "/static/style.css"):
             resp = await self.client.get(path)
             self.assertEqual(resp.status, 200, path)
+            self.assertEqual(resp.headers.get("Cache-Control"), "no-cache", path)
 
     async def test_typed_test_line_runs_through_the_wake_gate_to_the_agent(self):
         await self.start(with_band=False)

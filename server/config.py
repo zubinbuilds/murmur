@@ -58,6 +58,7 @@ class Config:
     host: str = "127.0.0.1"
     port: int = 8000
     mic_device: str = ""  # input device name when transport is "mic"; empty means the system default
+    serial_port: str = ""  # USB port when transport is "serial", e.g. /dev/cu.usbmodem101; empty lets the kit find the band
     agent: str = "instinct"  # instinct (texted over iMessage) | gemini (Gemini answers on this Mac)
     gemini_key: str = ""
     gemini_model: str = "gemini-4-hydrogen"
@@ -87,6 +88,7 @@ class Config:
             gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 10.0),
             turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
             mic_device=_get("MURMUR_MIC_DEVICE"),
+            serial_port=_get("MURMUR_SERIAL_PORT"),
             agent=_get("MURMUR_AGENT", "instinct").lower(),
             gemini_key=_get("GEMINI_API_KEY"),
             gemini_model=_get("GEMINI_MODEL", "gemini-4-hydrogen"),

@@ -36,7 +36,7 @@ open .env                   # paste ELEVENLABS_API_KEY and/or DEEPGRAM_API_KEY
 .venv/bin/python -m server --sim --engine mock    # no hardware, no keys
 ```
 
-Open <http://127.0.0.1:8000>. Press **Start listening**: the pretend band replays a recording,
+Open <http://127.0.0.1:8000>. Press **Start**: the pretend band replays a recording,
 and the mock engine shows a placeholder transcript. Type `Hey Murmur, email Sam I'm late` into
 "Test without speaking" to see the agent path (it only shows what it would send).
 
@@ -45,7 +45,7 @@ With the real band (number 82, so `Vexo-HACK-82`):
 1. Close the Vexo dashboard tab if it is open. The band accepts one Bluetooth connection.
 2. **Double-tap the band** so it can be found for 60 seconds.
 3. `.venv/bin/python -m server --engine elevenlabs` (or `--engine deepgram`).
-4. Calibrate the gate (below), then press **Start listening**.
+4. Calibrate the gate (below), then press **Start**.
 
 The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
 
@@ -67,7 +67,7 @@ Backup without the band, with a mic plugged into the Mac:
    for 3 s (with the music on if there will be music), then whisper for 3 s. It picks a
    threshold between them, and tells you if they are too close to separate.
 3. **Diarization plus an owner filter** (`server/owner.py`). The service labels speakers; the
-   first speaker in a session is you (or press **Enroll my voice** to pick the one who
+   first speaker in a session is you (or press **Enroll me** to pick the one who
    speaks most). Words from anyone else are dropped before the transcript and the agent see
    them.
 
@@ -156,7 +156,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
   fails, the next step is a spectral or voice-activity check on top of level.
 - **Diarization on whispers.** Speaker labels on whispered, single-speaker audio may be
   unstable. The owner filter treats the first label as you, so a mid-session label change
-  would drop your own words; "Enroll my voice" repairs that.
+  would drop your own words; "Enroll me" repairs that.
 - **iMessage.** Sending and reading replies are tested against fakes. Reading uses a
   common heuristic for newer macOS message storage.
 - **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
