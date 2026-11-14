@@ -17,7 +17,7 @@ from .base import OnEvent, STTEngine, STTError
 
 URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
 ERRORS = {
-    "auth_error", "quota_exceeded", "transcriber_error", "input_error", "invalid_request", "error",
+    "auth_error", "quota_exceeded", "commit_throttled", "transcriber_error", "input_error", "invalid_request", "error",
     "unaccepted_terms", "rate_limited", "queue_overflow", "resource_exhausted",
     "session_time_limit_exceeded", "chunk_size_exceeded", "insufficient_audio_activity",
 }
