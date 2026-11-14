@@ -196,6 +196,7 @@ class Pipeline:
                 return
             if await self._start_engine():
                 self.note("Speech connection restored.")
+                self.status()  # the restart cleared the owner
                 return
         self.listening = False
         self.error("stt", "Could not reconnect to the speech service. Listening is off.")
@@ -216,6 +217,7 @@ class Pipeline:
             self._on_final(ev)
         elif kind == "merge":
             self.owner.apply_merge(ev.get("from"), ev.get("to"))
+            self.status()  # a merge can rename the owner
         elif kind == "error":
             self.error("stt", ev.get("message", "speech error"))
         elif kind == "closed":
@@ -224,8 +226,9 @@ class Pipeline:
 
     def _on_final(self, ev: dict) -> None:
         words = ev.get("words") or []
+        owner_before = self.owner.owner
         finished = self.owner.observe(words)
-        for run in self.owner.split(words, ev.get("text", "")):
+        for run in self.owner.split(words, ev.get("text", ""), strict=True):
             if run["mine"]:
                 self.hub.emit({"type": "transcript", "speaker": "you", "speaker_id": run["speaker"],
                                "text": run["text"]})
@@ -237,7 +240,7 @@ class Pipeline:
         if finished:
             self.note(f"Enrolled: you are {self.owner.owner}.")
             self.status()
-        elif self.owner.owner and self._ignored == 0:
+        elif self.owner.owner != owner_before:
             self.status()
         if self._pending:
             self._schedule_flush()

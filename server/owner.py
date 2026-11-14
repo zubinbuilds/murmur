@@ -5,7 +5,10 @@ session. The mic is on your body and the gate drops most other sound, so by defa
 speaker the service identifies in a session is taken to be you. Pressing "Enroll" instead
 counts words for a few seconds and picks the speaker who said the most.
 
-Words from any other speaker are dropped before they reach the transcript or the agent.
+Words from any other speaker are dropped before they reach the transcript or the agent. Once
+there is an owner, a final word with no speaker label is dropped too, since it cannot be shown
+to be yours; partials stay permissive because they are only displayed. Until a labelled word
+arrives there is no owner and every word counts, so an engine without diarization still works.
 """
 
 from __future__ import annotations
@@ -67,15 +70,19 @@ class OwnerFilter:
             return True
         return False
 
-    def is_owner(self, speaker: Optional[str]) -> bool:
+    def is_owner(self, speaker: Optional[str], strict: bool = False) -> bool:
+        if self.owner is None:
+            return True
         speaker = self.resolve(speaker)
-        return speaker is None or self.owner is None or speaker == self.resolve(self.owner)
+        if speaker is None:
+            return not strict
+        return speaker == self.resolve(self.owner)
 
-    def split(self, words: list, fallback_text: str = "") -> list:
-        """Group consecutive words by speaker: [{"speaker", "mine", "text"}, ...]."""
+    def split(self, words: list, fallback_text: str = "", strict: bool = False) -> list:
+        """Group consecutive words by speaker: [{"speaker", "mine", "text"}, ...]. strict for finals."""
         if not words:
             text = fallback_text.strip()
-            return [{"speaker": None, "mine": True, "text": text}] if text else []
+            return [{"speaker": None, "mine": self.is_owner(None, strict), "text": text}] if text else []
         runs: list = []
         for w in words:
             speaker = self.resolve(w.get("speaker"))
@@ -85,5 +92,5 @@ class OwnerFilter:
             if runs and runs[-1]["speaker"] == speaker:
                 runs[-1]["text"] += " " + text
             else:
-                runs.append({"speaker": speaker, "mine": self.is_owner(speaker), "text": text})
+                runs.append({"speaker": speaker, "mine": self.is_owner(speaker, strict), "text": text})
         return runs
