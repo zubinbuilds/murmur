@@ -1,0 +1,4 @@
+aiohttp>=3.9
+numpy>=1.26
+av>=12
+bleak>=0.22

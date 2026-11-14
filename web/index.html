@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vocal</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Vocal</h1>
+    <div class="pills">
+      <span class="pill" id="pill-conn">Connecting to server</span>
+      <span class="pill" id="pill-band">Band</span>
+      <span class="pill" id="pill-listen">Not listening</span>
+      <span class="pill hidden" id="pill-armed">Armed: say your command</span>
+      <span class="pill warn hidden" id="pill-dry">Dry run: nothing is sent</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" aria-label="Transcript">
+      <div class="meter" title="Mic level. The marker is the whisper gate.">
+        <div id="meter-fill"></div>
+        <div id="meter-threshold"></div>
+        <span id="meter-label">-90 dB</span>
+      </div>
+      <div id="transcript" aria-live="polite"></div>
+      <div id="partial"></div>
+      <p class="muted" id="ignored"></p>
+    </section>
+
+    <aside>
+      <section class="panel">
+        <h2>Listening</h2>
+        <button id="listen" class="primary">Start listening</button>
+        <label>Speech engine
+          <select id="engine">
+            <option value="elevenlabs">ElevenLabs Scribe v3 Live</option>
+            <option value="deepgram">Deepgram Nova-3</option>
+            <option value="mock">Mock (no key)</option>
+          </select>
+        </label>
+        <p class="muted" id="band-detail"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Whisper gate</h2>
+        <p class="muted">Only audio above the marker is transcribed. Calibrate in the room you will use it in, with the music on if there will be music.</p>
+        <div class="row">
+          <button id="cal-noise">1. Record room (3 s)</button>
+          <button id="cal-whisper">2. Whisper (3 s)</button>
+        </div>
+        <p class="muted" id="cal-msg"></p>
+        <div class="row">
+          <button id="enroll">Enroll my voice</button>
+          <span class="muted" id="owner"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Agent</h2>
+        <p class="muted">Start a turn with "Hey <span id="wake-name">Vocal</span>".</p>
+        <ul id="commands"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Test without speaking</h2>
+        <form id="say-form" class="row">
+          <input id="say-text" type="text" placeholder="Hey Vocal, email Sam I'm late" autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+      </section>
+    </aside>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

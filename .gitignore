@@ -1,0 +1,7 @@
+vexo-open-kit/
+.venv/
+.env
+__pycache__/
+*.pyc
+recordings/
+.DS_Store
