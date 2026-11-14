@@ -87,6 +87,7 @@ body {
 .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; }
 .stage { display: flex; flex-direction: column; min-height: 0; padding: 40px 64px 32px; }
 .rail { display: flex; flex-direction: column; min-height: 0; gap: 20px; padding: 40px 32px 28px; border-left: 1px solid var(--line); }
+.rail:has(.log:empty) { border-color: transparent; }
 
 /* ---- start/stop + level ---- */
 .controls { display: flex; align-items: center; gap: 20px; }

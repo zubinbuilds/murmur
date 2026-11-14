@@ -32,14 +32,28 @@ function el(tag, className, text) {
 
 const pct = (db) => Math.max(0, Math.min(100, ((db + 90) / 90) * 100));
 
+let retryMs = 1000;
+
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => setConn("", "ok", "Connected");
+  ws.onopen = () => {
+    retryMs = 1000;
+    setConn("", "ok", "Connected");
+  };
   ws.onclose = () => {
     setConn("Offline", "bad", "Reconnecting");
-    setTimeout(connect, 1000);
+    setTimeout(connect, retryMs);
+    retryMs = Math.min(retryMs * 2, 10000);
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
+}
+
+// hello replays the server's history, so drop what it will redraw; error lines are not replayed and stay
+function clearReplayed() {
+  document.querySelectorAll("#transcript .line:not(.err)").forEach((n) => n.remove());
+  $("log").replaceChildren();
+  [commandCards, typedCards, replyCards, cleanups].forEach((m) => m.clear());
+  $("empty").classList.toggle("hidden", !!document.querySelector("#transcript .line"));
 }
 
 function setConn(text, kind, title) {
@@ -60,7 +74,6 @@ function applyState(s) {
     .filter(Boolean).join(" · ");
   $("meta").title = [state.band_detail, state.voice && `Voice: ${state.voice}`].filter(Boolean).join("\n");
   $("band-detail").textContent = state.band_detail || "";
-  $("badge-dry").classList.toggle("hidden", !state.dry_run);
   $("listen").textContent = state.listening ? "Stop" : "Start";
   $("listen").classList.toggle("on", !!state.listening);
   $("armed").classList.toggle("hidden", !state.armed);
@@ -194,6 +207,7 @@ function onSpoken(ev) {
 function handle(ev) {
   switch (ev.type) {
     case "hello":
+      clearReplayed();
       applyState(ev.state || {});
       (ev.history || []).forEach(handle);
       break;
