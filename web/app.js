@@ -130,10 +130,24 @@ function addLine(text, kind) {
   const cut = kind ? 0 : wakePrefix(text);
   if (cut) line.append(el("mark", null, text.slice(0, cut)), text.slice(cut));
   else line.textContent = text;
-  const box = $("transcript");
-  box.insertBefore(line, $("partial"));
-  box.scrollTop = box.scrollHeight;
+  $("transcript").insertBefore(line, $("partial"));
+  follow();
 }
+
+// Keep the newest words in view unless the reader has scrolled up to look back.
+let following = true;
+
+function follow() {
+  const box = $("transcript");
+  if (following) box.scrollTop = box.scrollHeight;
+  $("jump").classList.toggle("hidden", following);
+}
+
+$("transcript").addEventListener("scroll", () => {
+  const box = $("transcript");
+  following = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  $("jump").classList.toggle("hidden", following);
+});
 
 // ---- commands and replies ----
 
@@ -209,6 +223,7 @@ function handle(ev) {
     case "hello":
       clearReplayed();
       applyState(ev.state || {});
+      following = true;
       (ev.history || []).forEach(handle);
       break;
     case "status":
@@ -219,6 +234,7 @@ function handle(ev) {
       break;
     case "partial":
       $("partial").textContent = ev.text;
+      follow();
       break;
     case "transcript":
       $("partial").textContent = "";
@@ -262,6 +278,10 @@ $("whisper-only").onchange = (e) => send({ cmd: "whisper_only", on: e.target.che
 $("cal-noise").onclick = () => send({ cmd: "calibrate", phase: "noise" });
 $("cal-whisper").onclick = () => send({ cmd: "calibrate", phase: "whisper" });
 $("enroll").onclick = () => send({ cmd: "enroll" });
+$("jump").onclick = () => {
+  following = true;
+  follow();
+};
 $("recal").onclick = () => {
   recalibrating = true;
   $("cal-msg").textContent = "";
