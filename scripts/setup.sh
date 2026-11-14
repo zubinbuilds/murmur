@@ -13,7 +13,24 @@ else
   echo "vexo-open-kit/ already present (leaving it as it is)"
 fi
 
-[ -d .venv ] || python3 -m venv .venv
+# pipecat-ai needs Python 3.11 or newer; macOS ships 3.9 as python3.
+PY=""
+for candidate in python3 python3.13 python3.12 python3.11; do
+  if command -v "$candidate" >/dev/null && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then
+    PY="$candidate"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "Murmur needs Python 3.11 or newer. Install it (for example: brew install python@3.12) and run this again." >&2
+  exit 1
+fi
+if [ -d .venv ] && ! .venv/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  echo ".venv/ uses Python older than 3.11. Delete it (rm -rf .venv) and run this again." >&2
+  exit 1
+fi
+
+[ -d .venv ] || "$PY" -m venv .venv
 .venv/bin/python -m pip install --quiet --upgrade pip
 .venv/bin/python -m pip install --quiet -r requirements.txt
 

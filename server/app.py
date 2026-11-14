@@ -6,11 +6,12 @@ import asyncio
 import json
 from urllib.parse import urlparse
 
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 
 from .band_source import BandSource
 from .config import WEB_DIR, Config
 from .hub import Hub
+from .mic_source import MicSource
 from .pipeline import Pipeline
 from .stt import ENGINES
 
@@ -94,7 +95,8 @@ def build_app(cfg: Config, *, with_band: bool = True, engine_factory=None, agent
         hub.start()
         await pipeline.start()
         if with_band:
-            app[BAND] = asyncio.create_task(BandSource(cfg, pipeline).run())
+            source = MicSource if cfg.transport == "mic" else BandSource
+            app[BAND] = asyncio.create_task(source(cfg, pipeline).run())
 
     async def on_cleanup(app: web.Application) -> None:
         task = app.get(BAND)
@@ -107,6 +109,12 @@ def build_app(cfg: Config, *, with_band: bool = True, engine_factory=None, agent
         await pipeline.shutdown()
         await hub.stop()
 
+    async def on_shutdown(app: web.Application) -> None:
+        # an open page otherwise holds Ctrl+C for about 15 s while aiohttp waits on its socket
+        for ws in list(hub.clients):
+            await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutting down")
+
     app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
     return app

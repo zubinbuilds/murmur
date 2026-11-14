@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import json
 import unittest
 
@@ -94,22 +95,27 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(origin_allowed(Req("http://localhost.evil.example:8000"), 8000))
         self.assertFalse(origin_allowed(Req("null"), 8000))
 
-    @unittest.skipUnless(KIT_PYTHON.exists(), "run scripts/setup.sh to fetch the Vexo kit")
+    @unittest.skipUnless(KIT_PYTHON.exists() and importlib.util.find_spec("av"),
+                         "run scripts/setup.sh to fetch the Vexo kit and install av")
     async def test_pretend_band_audio_flows_end_to_end(self):
         """The kit's pretend band replays a recording; it must reach the gate and the engine."""
         cfg = Config(settle_s=0.05, stt="mock", transport="sim", band_number=82)
         await self.start(cfg=cfg, with_band=True)
         ws = await self.client.ws_connect("/ws")
-        loud = None
-        for _ in range(400):
-            msg = await asyncio.wait_for(ws.receive(), 20)
-            data = json.loads(msg.data)
-            if data["type"] == "level" and data["db"] > -45:
-                loud = data
-                break
-        self.assertIsNotNone(loud, "no speech-level audio arrived from the pretend band")
+
+        async def first_loud_level():
+            while True:
+                data = json.loads((await ws.receive()).data)
+                if data["type"] == "level" and data["db"] > -45:
+                    return data
+
+        # one overall limit: a band that keeps failing still sends status events, so per-receive timeouts never fire
+        try:
+            await asyncio.wait_for(first_loud_level(), 30)
+        except asyncio.TimeoutError:
+            self.fail("no speech-level audio arrived from the pretend band within 30 s")
         await ws.send_json({"cmd": "listen", "on": True})
-        transcript = await next_event(ws, "transcript", limit=2000)
+        transcript = await asyncio.wait_for(next_event(ws, "transcript", limit=2000), 30)
         self.assertEqual(transcript["speaker"], "you")
         self.assertIn("mock transcript", transcript["text"])
 

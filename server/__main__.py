@@ -1,8 +1,9 @@
-"""Run with:  .venv/bin/python -m server [--sim] [--engine elevenlabs|deepgram|mock]"""
+"""Run with:  .venv/bin/python -m server [--sim | --mic [DEVICE]] [--engine elevenlabs|deepgram|pipecat|mock]"""
 
 from __future__ import annotations
 
 import argparse
+import sys
 
 from aiohttp import web
 
@@ -18,11 +19,24 @@ def main() -> None:
     parser.add_argument("--band", type=int, help="band number, e.g. 82 for Vexo-HACK-82")
     parser.add_argument("--port", type=int, help="port for the web page (default 8000)")
     parser.add_argument("--no-band", action="store_true", help="serve the page only; do not connect to a band")
+    parser.add_argument("--mic", nargs="?", const="", metavar="DEVICE",
+                        help="listen on a Mac input instead of the band (default device if no name)")
     args = parser.parse_args()
+
+    try:  # Pipecat logs every frame at DEBUG through loguru; keep the terminal readable
+        from loguru import logger
+
+        logger.remove()
+        logger.add(sys.stderr, level="WARNING")
+    except ImportError:
+        pass
 
     cfg = Config.from_env()
     if args.sim:
         cfg.transport = "sim"
+    if args.mic is not None:
+        cfg.transport = "mic"
+        cfg.mic_device = args.mic or cfg.mic_device
     if args.engine:
         cfg.stt = args.engine
     if args.band:
