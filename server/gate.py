@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 from collections import Counter, deque
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -116,14 +117,17 @@ class WhisperGate:
         if len(self._levels) == FLOOR_WINDOW_FRAMES:
             self.floor_db = float(np.percentile(self._levels, 10))
 
-    def process(self, frame: bytes) -> GateOutput:
+    def process(self, frame: bytes, body: Optional[bool] = None) -> GateOutput:
+        """body: the own-voice gate's verdict, or None when it is not in use. While it is False a frame
+        counts as quiet but keeps its audio, so the pre-roll can still send it once the body gate opens."""
         if len(frame) != FRAME_BYTES:
             frame = (frame + SILENCE)[:FRAME_BYTES]
         db = frame_db(frame)
         self._track_floor(db)
-        loud = db > self.threshold
+        above = db > self.threshold
+        loud = above and body is not False
         self.stats["frames"] += 1
-        self.stats["above"] += loud
+        self.stats["above"] += above
         samples = np.frombuffer(frame, dtype=np.int16)
         if self.s.whisper_only and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK:
             loud = False

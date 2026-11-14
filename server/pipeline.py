@@ -16,7 +16,8 @@ from typing import Callable, Optional
 
 from . import gemini, typer
 from .agents import make_agent
-from .config import RECORDINGS_DIR
+from .bodygate import MAX_RATE_HZ, MIN_RATE_HZ, BodyGate
+from .config import OWN_VOICE_MODES, RECORDINGS_DIR
 from .gate import FRAME_MS, SAMPLE_RATE, GateSettings, WhisperGate, suggest_threshold
 from .hub import Hub
 from .owner import OwnerFilter
@@ -26,6 +27,8 @@ from .wake import WakeGate
 
 CALIBRATION_FRAMES = 150  # 3 seconds
 GATE_STATS_FRAMES = 50  # one "gate" event a second
+RATE_SAMPLES = 10  # motion samples needed to measure the band's rate before the body gate is made
+MOTION_STALE_S = 1.0  # no motion for this long: the own-voice gate steps aside, so the band never goes deaf
 # arrival_s: our clock since the WAV's first frame; wav_s: audio recorded by then; t, n: the kit's own
 MOTION_COLUMNS = ("arrival_s", "wav_s", "t", "n", "ax", "ay", "az")
 QUICK_CLOSE_S = 5.0  # a speech connection that closes sooner than this after opening is refused, not dropped
@@ -68,6 +71,12 @@ class Pipeline:
         self._motion_csv = None
         self._recorded_frames = 0
         self._record_t0: Optional[float] = None  # clock() at the WAV's first frame
+        self.own_voice = cfg.own_voice
+        self.body: Optional[BodyGate] = None  # made from the first motion samples, once their rate is known
+        self._motion_wait: list = []
+        self._last_motion: Optional[float] = None
+        self._motion_stale_noted = False
+        self._motion_ref: Optional[float] = None  # clock() at the first frame in motion mode
 
     # ---- lifecycle ----
 
@@ -116,6 +125,7 @@ class Pipeline:
             "threshold": round(self.gate.threshold, 1),
             "calibrated": self.gate.s.calibrated,
             "whisper_only": self.gate.s.whisper_only,
+            "own_voice": self.own_voice,
             "wake_aliases": list(self.cfg.wake_aliases),
             "source": self.cfg.transport,
             "agent": self.cfg.agent,
@@ -140,12 +150,16 @@ class Pipeline:
                 self._record_t0 = self.clock()
             self._recording.writeframes(frame)
             self._recorded_frames += 1
-        out = self.gate.process(frame)
+        out = self.gate.process(frame, body=self._body_verdict())
         stats = self.gate.stats
         if stats["frames"] >= GATE_STATS_FRAMES:
+            body = self.body
             self.hub.emit({"type": "gate", "frames": stats["frames"], "above": stats["above"],
                            "voiced": stats["voiced"], "passed": stats["passed"],
-                           "floor": round(self.gate.floor_db, 1), "threshold": round(self.gate.threshold, 1)})
+                           "floor": round(self.gate.floor_db, 1), "threshold": round(self.gate.threshold, 1),
+                           "body_active": body.active if body else None,
+                           "body_energy": round(body.energy, 5) if body else None,
+                           "body_floor": round(body.floor, 5) if body else None})
             stats.clear()
         if self._calibration is not None:
             self._collect(out.db)
@@ -166,13 +180,56 @@ class Pipeline:
             self._begin_reconnect(engine)
 
     def on_motion(self, samples) -> None:
-        """Accelerometer events from the band (one kit Message or a list): recorded beside the audio, else unused."""
+        """Accelerometer events from the band (one kit Message or a list): fed to the body gate, and recorded."""
+        samples = [samples] if isinstance(samples, dict) else list(samples)
+        accel = [s for s in samples if s.get("ax") is not None and s.get("t") is not None]
+        if accel:
+            self._last_motion = self.clock()
+            self._feed_body(accel)
         if self._motion_csv is None or self._record_t0 is None:
             return  # nothing to line them up with before the first audio frame
         arrival = round(self.clock() - self._record_t0, 4)
         wav_s = round(self._recorded_frames * FRAME_MS / 1000, 3)
-        for s in [samples] if isinstance(samples, dict) else samples:
+        for s in samples:
             self._motion_csv.writerow([arrival, wav_s, s.get("t"), s.get("n"), s.get("ax"), s.get("ay"), s.get("az")])
+
+    def _feed_body(self, accel: list) -> None:
+        if self.body is None:
+            self._motion_wait += accel
+            if len(self._motion_wait) < RATE_SAMPLES:
+                return
+            span_ms = self._motion_wait[-1]["t"] - self._motion_wait[0]["t"]
+            if span_ms <= 0:  # stamps that do not move cannot give a rate; start over
+                self._motion_wait = []
+                return
+            rate = (len(self._motion_wait) - 1) * 1000 / span_ms
+            self.body = BodyGate(min(max(rate, MIN_RATE_HZ), MAX_RATE_HZ))
+            accel, self._motion_wait = self._motion_wait, []
+        self.body.feed(accel)
+
+    def _body_verdict(self) -> Optional[bool]:
+        """The body gate's say on this frame: None (not in use, or no motion lately), else whether it is active."""
+        if self.own_voice != "motion":
+            return None
+        now = self.clock()
+        if self._motion_ref is None:
+            self._motion_ref = now  # the first frame in this mode: motion gets a second to show up
+        stale = now - (self._last_motion if self._last_motion is not None else self._motion_ref) > MOTION_STALE_S
+        if stale and not self._motion_stale_noted:
+            self._motion_stale_noted = True
+            self.note(f"No motion from the band for {MOTION_STALE_S:g} s: own-voice gate paused, level gate only.")
+        if stale or self.body is None:
+            return None
+        self._motion_stale_noted = False
+        return self.body.active
+
+    def set_own_voice(self, mode: str) -> None:
+        if mode not in OWN_VOICE_MODES:
+            raise ValueError(f"own_voice must be one of {', '.join(OWN_VOICE_MODES)}, got {mode!r}")
+        self.own_voice = mode
+        self._motion_stale_noted = False
+        self._motion_ref = None
+        self.status()
 
     # ---- listening on/off, engine choice ----
 

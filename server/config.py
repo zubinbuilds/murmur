@@ -11,6 +11,7 @@ KIT_PYTHON = ROOT / "vexo-open-kit" / "python"
 SAMPLE_SPEECH = ROOT / "vexo-open-kit" / "dashboard" / "speech" / "sample-speech.opus"
 WEB_DIR = ROOT / "web"
 RECORDINGS_DIR = ROOT / "recordings"
+OWN_VOICE_MODES = ("off", "motion")
 
 
 def load_dotenv(path: Path | None = None) -> None:
@@ -66,6 +67,7 @@ class Config:
     cleanup: bool = True  # tidy each command with Gemini before acting on it, when a Gemini key is set
     whisper_only: bool = True  # drop voiced frames, so people speaking aloud nearby never reach the speech service
     record: bool = False  # write the raw band audio, before the gate, to recordings/ for analyze_recording.py
+    own_voice: str = "off"  # off | motion (a turn needs the band's accelerometer to feel the wearer speaking)
     voice_device: str = ""  # output device that speaks replies aloud; empty means replies are not spoken
     tts: str = "elevenlabs"  # elevenlabs | deepgram
     elevenlabs_voice_id: str = ""  # empty means the first voice in your ElevenLabs library
@@ -97,6 +99,7 @@ class Config:
             cleanup=_get("MURMUR_CLEANUP", "1").lower() not in ("0", "false", "no", "off"),
             whisper_only=_get("MURMUR_WHISPER_ONLY", "1").lower() not in ("0", "false", "no", "off"),
             record=_get("MURMUR_RECORD", "0").lower() not in ("0", "false", "no", "off"),
+            own_voice=_get("MURMUR_OWN_VOICE", "off").lower(),
             voice_device=_get("MURMUR_VOICE_DEVICE"),
             tts=_get("MURMUR_TTS", "elevenlabs").lower(),
             elevenlabs_voice_id=_get("ELEVENLABS_VOICE_ID"),

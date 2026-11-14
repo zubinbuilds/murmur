@@ -39,7 +39,9 @@ class GateStatsTests(unittest.IsolatedAsyncioTestCase):
         events = await self.feed(noise(-30, 2 * GATE_STATS_FRAMES + 10))
         self.assertEqual(len(events), 2)
         first = events[0]
-        self.assertEqual(set(first), {"type", "frames", "above", "voiced", "passed", "floor", "threshold"})
+        self.assertEqual(set(first), {"type", "frames", "above", "voiced", "passed", "floor", "threshold",
+                                      "body_active", "body_energy", "body_floor"})
+        self.assertIsNone(first["body_active"])  # no motion arrived
         self.assertEqual(first["frames"], GATE_STATS_FRAMES)
         self.assertEqual(first["above"], GATE_STATS_FRAMES)  # -30 dB is over the -45 default
         self.assertEqual(first["voiced"], 0)

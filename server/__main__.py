@@ -9,7 +9,7 @@ import sys
 from aiohttp import web
 
 from .app import build_app
-from .config import Config
+from .config import OWN_VOICE_MODES, Config
 from .stt import ENGINES
 
 
@@ -22,6 +22,8 @@ def main() -> None:
     parser.add_argument("--no-band", action="store_true", help="serve the page only; do not connect to a band")
     parser.add_argument("--mic", nargs="?", const="", metavar="DEVICE",
                         help="listen on a Mac input instead of the band (default device if no name)")
+    parser.add_argument("--own-voice", choices=OWN_VOICE_MODES,
+                        help="motion: a turn needs the band's accelerometer to feel you speak (default off)")
     parser.add_argument("--record", action="store_true",
                         help="save the raw band audio (before the gate) as a WAV in recordings/")
     parser.add_argument("--usb", nargs="?", const="", metavar="PORT",
@@ -39,6 +41,8 @@ def main() -> None:
     cfg = Config.from_env()
     if args.record:
         cfg.record = True
+    if args.own_voice:
+        cfg.own_voice = args.own_voice
     if args.sim:
         cfg.transport = "sim"
         cfg.whisper_only = False  # the kit's sample recording is a normal speaking voice
