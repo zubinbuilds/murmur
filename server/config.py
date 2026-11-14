@@ -41,8 +41,8 @@ def _num(name: str, default: float, cast=float):
 @dataclass
 class Config:
     band_number: int = 82
-    transport: str = "ble"  # "ble" (real band) or "sim" (pretend band replaying a sample recording)
-    stt: str = "elevenlabs"  # elevenlabs | deepgram | mock
+    transport: str = "ble"  # "ble" (real band), "sim" (pretend band replaying a sample recording) or "mic" (a Mac input)
+    stt: str = "elevenlabs"  # elevenlabs | deepgram | pipecat (Deepgram Nova-3 through Pipecat) | mock
     elevenlabs_key: str = ""
     deepgram_key: str = ""
     instinct_to: str = ""
@@ -57,6 +57,14 @@ class Config:
     settle_s: float = 1.2  # wait this long after the last transcript piece before acting on a turn
     host: str = "127.0.0.1"
     port: int = 8000
+    mic_device: str = ""  # input device name when transport is "mic"; empty means the system default
+    agent: str = "instinct"  # instinct (texted over iMessage) | gemini (Gemini answers on this Mac)
+    gemini_key: str = ""
+    gemini_model: str = "gemini-4-hydrogen"
+    cleanup: bool = True  # tidy each command with Gemini before acting on it, when a Gemini key is set
+    voice_device: str = ""  # output device that speaks replies aloud; empty means replies are not spoken
+    tts: str = "elevenlabs"  # elevenlabs | deepgram
+    elevenlabs_voice_id: str = ""  # empty means the first voice in your ElevenLabs library
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -77,4 +85,12 @@ class Config:
             gate_threshold_db=_num("MURMUR_GATE_THRESHOLD_DB", -45.0),
             gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 10.0),
             turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
+            mic_device=_get("MURMUR_MIC_DEVICE"),
+            agent=_get("MURMUR_AGENT", "instinct").lower(),
+            gemini_key=_get("GEMINI_API_KEY"),
+            gemini_model=_get("GEMINI_MODEL", "gemini-4-hydrogen"),
+            cleanup=_get("MURMUR_CLEANUP", "1").lower() not in ("0", "false", "no", "off"),
+            voice_device=_get("MURMUR_VOICE_DEVICE"),
+            tts=_get("MURMUR_TTS", "elevenlabs").lower(),
+            elevenlabs_voice_id=_get("ELEVENLABS_VOICE_ID"),
         )
