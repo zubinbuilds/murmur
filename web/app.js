@@ -16,7 +16,7 @@ const ENGINES = { elevenlabs: "ElevenLabs", deepgram: "Deepgram", pipecat: "Deep
 const AGENTS = { instinct: "Instinct", gemini: "Gemini" };
 const STATES = {
   sending: ["sending", "busy"], sent: ["sent", "ok"], typed: ["typed", "ok"],
-  "dry-run": ["dry run", "dry"], error: ["error", "bad"],
+  "dry-run": ["", ""], error: ["error", "bad"], // no agent is connected today, so a dry run is just the heard command
 };
 
 function send(msg) {
@@ -70,7 +70,7 @@ function applyState(s) {
   const source = state.source || "ble";
   const healthy = source === "mic" || band === "connected" || band === "simulated";
   const input = (SOURCES[source] || source) + (healthy ? "" : ` (${band})`);
-  $("meta").textContent = [input, ENGINES[state.engine] || state.engine, AGENTS[state.agent] || state.agent]
+  $("meta").textContent = [input, ENGINES[state.engine] || state.engine]
     .filter(Boolean).join(" · ");
   $("meta").title = [state.band_detail, state.voice && `Voice: ${state.voice}`].filter(Boolean).join("\n");
   $("band-detail").textContent = state.band_detail || "";
@@ -85,7 +85,9 @@ function applyState(s) {
 }
 
 function renderCalib() {
-  $("calib").classList.toggle("hidden", !!state.calibrated && !recalibrating && !showingResult);
+  // Whisper mode separates the owner by voicing, not level, so it never needs the level calibration.
+  const settled = !!state.calibrated || !!state.whisper_only;
+  $("calib").classList.toggle("hidden", settled && !recalibrating && !showingResult);
 }
 
 function onCalibration(ev) {
@@ -102,6 +104,27 @@ function onCalibration(ev) {
     $("cal-msg").textContent = ev.message || "Calibration failed.";
   }
   renderCalib();
+}
+
+// Shares of each one-second gate report, picked from --sim runs: with "Whispers only" off,
+// passed was 24-50 of 50 frames; with it on, voiced was 16-38 of 50 and passed 0.
+const HEARING_SHARE = 0.2;
+const VOICED_SHARE = 0.2;
+const QUIET_PASS_SHARE = 0.1;
+const FRAME_S = 0.02;
+let ignoredVoiceFrames = 0;
+
+function onGate(ev) {
+  const frames = ev.frames || 1;
+  const passed = (ev.passed || 0) / frames;
+  const voiced = (ev.voiced || 0) / frames;
+  const word = passed >= HEARING_SHARE ? "Hearing you"
+    : voiced >= VOICED_SHARE && passed < QUIET_PASS_SHARE ? "Ignoring nearby voice" : "";
+  $("gate-word").textContent = word;
+  $("gate-word").className = "gate-word" + (word === "Hearing you" ? " hearing" : word ? " ignoring" : "");
+  ignoredVoiceFrames += ev.voiced || 0;
+  const secs = Math.round(ignoredVoiceFrames * FRAME_S);
+  $("ignored-secs").textContent = secs > 0 ? `Ignored ${secs} s of nearby voice` : "";
 }
 
 function setGate(db) {
@@ -163,7 +186,7 @@ function setState(li, stateName, detail) {
   if (!tag) tag = li.appendChild(el("span"));
   const [label, tone] = STATES[stateName] || [String(stateName || ""), ""];
   tag.textContent = label;
-  tag.className = "tag" + (tone ? " " + tone : "");
+  tag.className = "tag" + (tone ? " " + tone : "") + (label ? "" : " hidden");
   li.title = detail || "";
 }
 
@@ -231,6 +254,8 @@ function handle(ev) {
       $("partial").textContent = "";
       ignoredWords = 0;
       $("ignored").textContent = "";
+      ignoredVoiceFrames = 0;
+      $("ignored-secs").textContent = "";
       clearReplayed();
       break;
     case "status":
@@ -238,6 +263,9 @@ function handle(ev) {
       break;
     case "level":
       setLevel(ev);
+      break;
+    case "gate":
+      onGate(ev);
       break;
     case "partial":
       $("partial").textContent = ev.text;

@@ -24,9 +24,9 @@
           <div class="meter-fill" id="meter-fill"></div>
           <div class="meter-gate" id="meter-gate"></div>
         </div>
+        <span class="gate-word" id="gate-word" role="status"></span>
+        <span class="ignored-secs" id="ignored-secs"></span>
         <span class="tag armed hidden" id="armed" role="status">Say command</span>
-        <button id="enroll" class="btn" type="button">Enroll me</button>
-        <span class="owner" id="owner" role="status">You: not set</span>
       </div>
 
       <div class="calib hidden" id="calib">
@@ -59,6 +59,10 @@
           <option value="mock">Mock</option>
         </select>
         <label class="check"><input type="checkbox" id="whisper-only"> Whispers only</label>
+        <div class="row">
+          <button id="enroll" class="btn" type="button">Enroll me</button>
+          <span class="owner" id="owner" role="status">You: not set</span>
+        </div>
         <button id="recal" class="link" type="button">Recalibrate</button>
         <p class="hint" id="note" role="status"></p>
         <p class="hint" id="ignored"></p>

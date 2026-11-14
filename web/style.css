@@ -77,7 +77,6 @@ body {
   color: var(--muted);
   background: var(--line);
 }
-.tag.dry { color: var(--yellow); background: var(--yellow-bg); }
 .tag.ok { color: var(--green); background: var(--green-bg); }
 .tag.bad { color: var(--red); background: var(--red-bg); }
 .tag.armed { color: var(--accent); background: var(--blue-bg); }
@@ -178,7 +177,7 @@ body {
 .more summary:hover { color: var(--ink); }
 .more[open] { display: grid; gap: 10px; }
 .more[open] summary { margin-bottom: 4px; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 input[type=text], select {
   flex: 1;
   min-width: 0;
@@ -205,6 +204,10 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--accent
 .btn:active { transform: scale(0.98); }
 .btn.dark { background: var(--dark); color: var(--on-dark); border-color: var(--dark); }
 .owner { font: 12px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.gate-word { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--muted); }
+.gate-word.hearing { color: var(--accent); }
+.gate-word.ignoring { color: var(--yellow); }
+.ignored-secs { font: 12px/1 var(--mono); color: var(--muted); white-space: nowrap; }
 .calib {
   display: flex;
   flex-wrap: wrap;
