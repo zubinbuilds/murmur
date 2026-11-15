@@ -76,7 +76,8 @@ function applyState(s) {
   $("band-detail").textContent = state.band_detail || "";
   $("listen").textContent = state.listening ? "Stop" : "Start";
   $("listen").classList.toggle("on", !!state.listening);
-  $("armed").classList.toggle("hidden", !state.armed);
+  $("armed").classList.toggle("hidden", !state.armed || !state.wake_word);
+  $("say-text").placeholder = state.wake_word ? "Hey Murmur, text Sam I'm running late" : "Text Sam I'm running late";
   if (state.engine) $("engine").value = state.engine;
   $("whisper-only").checked = !!state.whisper_only;
   $("owner").textContent = state.enrolling ? "You: whisper now..." : `You: ${state.owner || "not set"}`;
@@ -141,6 +142,7 @@ function setLevel(ev) {
 // ---- transcript ----
 
 function wakePrefix(text) {
+  if (!state.wake_word) return 0;
   const aliases = (state.wake_aliases && state.wake_aliases.length ? state.wake_aliases : ["murmur"])
     .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const m = text.match(new RegExp(`^\\s*hey[\\s,]+(?:${aliases.join("|")})\\b[\\s,.!:]*`, "i"));
@@ -203,6 +205,12 @@ function onCommand(ev) {
     commandCards.set(ev.text, li);
     const early = cleanups.get(ev.text);
     if (early) claimCleanup(li, early);
+  }
+  if (ev.state === "dry-run" && !state.wake_word) {
+    // without a wake phrase every turn is a command, so unsent ones would just repeat the transcript
+    li.remove();
+    commandCards.delete(ev.text);
+    return;
   }
   setState(li, ev.state, ev.detail);
 }
