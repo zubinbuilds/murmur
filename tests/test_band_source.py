@@ -125,6 +125,15 @@ class BandSourceConnectTests(unittest.IsolatedAsyncioTestCase):
         _, kwargs = await self.connect_args(Config(transport="ble", serial_port="/dev/cu.usbmodem101"))
         self.assertEqual(kwargs, {"transport": "ble", "auto_reconnect": True})
 
+    async def test_bluetooth_status_names_the_double_tap_and_the_dashboard(self):
+        for transport, expect in (("ble", True), ("serial", False)):
+            pipeline = MotionPipeline()
+            with mock.patch.dict(sys.modules, fake_kit([])), \
+                    mock.patch("server.band_source.KIT_PYTHON", Path(__file__).parent):
+                with self.assertRaises(Stop):
+                    await BandSource(Config(transport=transport), pipeline)._session()
+            self.assertEqual("Double-tap" in pipeline.details[0] and "dashboard" in pipeline.details[0], expect)
+
 
 class MotionTests(unittest.IsolatedAsyncioTestCase):
     async def run_session(self, cfg, band, pipeline, script=None):

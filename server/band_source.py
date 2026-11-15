@@ -56,7 +56,11 @@ class BandSource:
 
         cfg = self.cfg
         name = f"Vexo-HACK-{cfg.band_number:02d}"
-        self.pipeline.set_band_status("connecting", f"Looking for {name}. Double-tap the band if it is not found.")
+        looking = f"Looking for {name}."
+        if cfg.transport == "ble":  # the kit's getting-started.md: one Bluetooth connection, found for 60 s after a double-tap
+            looking += (" Double-tap the band (it can be found for 60 s after), and close the Vexo dashboard"
+                        " or any other computer connected to it.")
+        self.pipeline.set_band_status("connecting", looking)
 
         options = {}
         if cfg.transport == "sim":

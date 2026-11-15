@@ -1,7 +1,9 @@
 """A guided 40 second tuning recording: it starts the server with --record, tells you when to
 whisper, speak or stay silent, then stops the server and prints the analysis.
 
-    .venv/bin/python scripts/guided_recording.py [USB PORT]
+    .venv/bin/python scripts/guided_recording.py [USB PORT | ble]
+
+USB is the default; `ble` records over Bluetooth, so the band can sit in the retainer.
 """
 
 from __future__ import annotations
@@ -45,11 +47,14 @@ def wait_for_sound(server: subprocess.Popen, before: set, timeout_s: float = 60)
 
 
 def main() -> None:
-    port = sys.argv[1] if len(sys.argv) > 1 else "/dev/cu.usbmodem101"
+    link = sys.argv[1] if len(sys.argv) > 1 else "/dev/cu.usbmodem101"
+    band = [] if link == "ble" else ["--usb", link]  # no --usb: the server uses Bluetooth
     before = set(RECORDINGS.glob("*.wav"))
     # The mock engine: this run only records, so nothing is sent to a speech service.
-    server = subprocess.Popen([sys.executable, "-m", "server", "--usb", port, "--engine", "mock", "--record"], cwd=ROOT)
+    server = subprocess.Popen([sys.executable, "-m", "server", *band, "--engine", "mock", "--record"], cwd=ROOT)
     try:
+        if not band:
+            print("\nDouble-tap the band so it can be found (60 s), then put it in your mouth.")
         print("\nPut the band in your mouth. Waiting for its sound...")
         wav = wait_for_sound(server, before)
         started = time.monotonic() - (wav.stat().st_size - WAV_HEADER_BYTES) / BYTES_PER_S
