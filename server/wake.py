@@ -14,15 +14,18 @@ class WakeGate:
     turn within `arm_seconds` is taken as the command, so you can pause after the wake phrase.
     After a command the gate stays armed for `follow_seconds`, so you can keep going without the
     wake phrase; each follow-up renews the window. 0 turns that off.
+    With wake_word=False every turn is a command; a leading "Hey Murmur" is stripped if said.
     """
 
     def __init__(self, aliases: Iterable[str] = ("murmur", "murmurs", "murmer"), arm_seconds: float = 8.0,
-                 clock: Callable[[], float] = time.monotonic, follow_seconds: float = 0.0) -> None:
+                 clock: Callable[[], float] = time.monotonic, follow_seconds: float = 0.0,
+                 wake_word: bool = True) -> None:
         names = "|".join(re.escape(a.strip()) for a in aliases if a.strip()) or "murmur"
         # smart_format can write the name as a possessive ("Hey Murmur's"); the "s" is not part of the command
         self._pattern = re.compile(rf"^\W*hey\W+(?:{names})(?:['’]s)?\b\W*(?P<rest>.*)$", re.IGNORECASE | re.DOTALL)
         self.arm_seconds = arm_seconds
         self.follow_seconds = follow_seconds
+        self.wake_word = wake_word
         self._clock = clock
         self._armed_until = 0.0
 
@@ -41,6 +44,8 @@ class WakeGate:
         if not text:
             return None
         match = self._pattern.match(text)
+        if not self.wake_word:
+            return (match.group("rest").strip() or None) if match else text
         if match:
             rest = match.group("rest").strip()
             if rest:

@@ -5,6 +5,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
+
+from .vocab import load_keyterms
 
 ROOT = Path(__file__).resolve().parent.parent
 KIT_PYTHON = ROOT / "vexo-open-kit" / "python"
@@ -55,16 +58,23 @@ class Config:
     tap_threshold: float = 1.2
     gate_threshold_db: float = -45.0
     gate_margin_db: float = 14.0
-    turn_silence_ms: int = 700
-    settle_s: float = 1.2  # wait this long after the last transcript piece before acting on a turn
+    # gate hangover; 600 is the shortest that keeps the owner's 15:26 whisper one turn (500 split it in 2, 300 in 3)
+    turn_silence_ms: int = 600
+    settle_s: float = 0.3  # wait this long after the last transcript piece before acting on a turn; a partial restarts it
     host: str = "127.0.0.1"
     port: int = 8000
     mic_device: str = ""  # input device name when transport is "mic"; empty means the system default
     serial_port: str = ""  # USB port when transport is "serial", e.g. /dev/cu.usbmodem101; empty lets the kit find the band
     replay_path: str = ""  # WAV played in real time when transport is "replay" (--replay)
     keyterms: tuple = ("Murmur",)  # Deepgram Nova-3 keyterm prompting: words and phrases to recognise more readily
+    vocab: bool = True  # add the bundled server/vocab.txt to keyterms (from_env, via vocab.py)
+    vocab_file: str = ""  # the user's own or a downloaded list, one term per line
+    vocab_apps: bool = False  # add the names in /Applications; off because they go to the speech service
+    fallback_keyterms: Optional[tuple] = None  # MURMUR_KEYTERMS alone, when vocab.py added more; a refused connection retries with it
+    wake_word: bool = False  # True: a command must start with "Hey Murmur"; False: every turn is a command
     follow_seconds: float = 20.0  # after a command, later turns are commands too until this long passes quietly; 0 = off
-    agent: str = "instinct"  # instinct (texted over iMessage) | gemini (Gemini answers on this Mac)
+    agent: str = "instinct"  # instinct (iMessage) | gemini (answers here) | command (runs agent_cmd) | type (types it)
+    agent_cmd: str = ""  # with agent "command": program and args, the command text is added as the last argument
     gemini_key: str = ""
     gemini_model: str = "gemini-4-hydrogen"
     cleanup: bool = True  # tidy each command with Gemini before acting on it, when a Gemini key is set
@@ -80,7 +90,7 @@ class Config:
     def from_env(cls) -> "Config":
         load_dotenv()
         aliases = tuple(a.strip().lower() for a in _get("MURMUR_WAKE_ALIASES", "murmur,murmurs,murmer").split(",") if a.strip())
-        return cls(
+        cfg = cls(
             band_number=_num("MURMUR_BAND", 82, int),
             transport=_get("MURMUR_TRANSPORT", "ble").lower(),
             stt=_get("MURMUR_STT", "elevenlabs").lower(),
@@ -90,16 +100,19 @@ class Config:
             dry_run=_get("MURMUR_DRY_RUN", "1").lower() not in ("0", "false", "no", "off"),
             wake_aliases=aliases or ("murmur",),
             keyterms=tuple(t.strip() for t in _get("MURMUR_KEYTERMS", "Murmur").split(",") if t.strip()),
+            wake_word=_get("MURMUR_WAKE_WORD", "0").lower() in ("1", "true", "yes", "on"),
             follow_seconds=_num("MURMUR_FOLLOW_SECONDS", 20.0),
             mic_gain_db=_num("MURMUR_MIC_GAIN_DB", 20.0),
             toggle_gesture=_get("MURMUR_TOGGLE_GESTURE", "double-tap").lower(),
             tap_threshold=_num("MURMUR_TAP_THRESHOLD", 1.2),
             gate_threshold_db=_num("MURMUR_GATE_THRESHOLD_DB", -45.0),
             gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 14.0),
-            turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
+            turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 600, int),
+            settle_s=_num("MURMUR_SETTLE_S", 0.3),
             mic_device=_get("MURMUR_MIC_DEVICE"),
             serial_port=_get("MURMUR_SERIAL_PORT"),
             agent=_get("MURMUR_AGENT", "instinct").lower(),
+            agent_cmd=_get("MURMUR_AGENT_CMD"),
             gemini_key=_get("GEMINI_API_KEY"),
             gemini_model=_get("GEMINI_MODEL", "gemini-4-hydrogen"),
             cleanup=_get("MURMUR_CLEANUP", "1").lower() not in ("0", "false", "no", "off"),
@@ -109,4 +122,11 @@ class Config:
             voice_device=_get("MURMUR_VOICE_DEVICE"),
             tts=_get("MURMUR_TTS", "elevenlabs").lower(),
             elevenlabs_voice_id=_get("ELEVENLABS_VOICE_ID"),
+            vocab=_get("MURMUR_VOCAB", "1").lower() not in ("0", "false", "no", "off"),
+            vocab_file=_get("MURMUR_VOCAB_FILE"),
+            vocab_apps=_get("MURMUR_VOCAB_APPS", "0").lower() not in ("0", "false", "no", "off"),
         )
+        terms = load_keyterms(cfg)
+        if terms != cfg.keyterms:
+            cfg.keyterms, cfg.fallback_keyterms = terms, cfg.keyterms
+        return cfg

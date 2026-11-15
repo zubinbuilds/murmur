@@ -54,7 +54,7 @@ class Pipeline:
             threshold_db=cfg.gate_threshold_db, margin_db=cfg.gate_margin_db, hangover_ms=cfg.turn_silence_ms,
             whisper_only=cfg.whisper_only))
         self.owner = OwnerFilter()
-        self.wake = WakeGate(cfg.wake_aliases, clock=clock, follow_seconds=cfg.follow_seconds)
+        self.wake = WakeGate(cfg.wake_aliases, clock=clock, follow_seconds=cfg.follow_seconds, wake_word=cfg.wake_word)
         self.agent = agent or make_agent(cfg)
         self.voice = make_voice(cfg, hub)
         self.engine = None
@@ -131,6 +131,7 @@ class Pipeline:
             "whisper_only": self.gate.s.whisper_only,
             "own_voice": self.own_voice,
             "wake_aliases": list(self.cfg.wake_aliases),
+            "wake_word": self.wake.wake_word,
             "source": self.cfg.transport,
             "agent": self.cfg.agent,
             "voice": self.cfg.voice_device if self.voice else "",
@@ -276,12 +277,24 @@ class Pipeline:
             return True
         except STTError as e:
             self.engine = None
+            if self._drop_word_list():  # the raw Deepgram engine is refused here, inside start()
+                return await self._start_engine()
             self.error("stt", str(e))
             return False
         except Exception as e:
             self.engine = None
             self.error("stt", f"Could not start {self.engine_name}: {e}")
             return False
+
+    def _drop_word_list(self) -> bool:
+        """The service may refuse the ready-made word list as it connects: go back to MURMUR_KEYTERMS, once."""
+        if (self.cfg.fallback_keyterms is None or self.engine_name not in ("deepgram", "pipecat")
+                or not self.cfg.deepgram_key):  # no key or no keyterms on this engine: the list is not the cause
+            return False
+        self.cfg.keyterms, self.cfg.fallback_keyterms = self.cfg.fallback_keyterms, None
+        self.note("The speech service refused the connection. Trying again with MURMUR_KEYTERMS only, "
+                  "without the ready-made word list.")
+        return True
 
     async def _stop_engine(self) -> None:
         engine, self.engine = self.engine, None
@@ -305,6 +318,9 @@ class Pipeline:
         except Exception:
             pass
         if self.clock() - self._engine_started < QUICK_CLOSE_S:  # refused as it opened: a bad key, not a dropped line
+            if self._drop_word_list() and await self._start_engine():  # or a word list it would not take
+                self.status()
+                return
             self.listening = False
             self.error("stt", "The speech service closed the connection as soon as it opened "
                               "(see the error above). Listening is off.")
@@ -329,7 +345,8 @@ class Pipeline:
             return  # a stale engine we already replaced
         kind = ev["type"]
         if kind == "partial":
-            runs = [r for r in self.owner.split(ev.get("words") or [], ev.get("text", "")) if r["mine"]]
+            runs = [r for r in self.owner.split(ev.get("words") or [], ev.get("text", ""))
+                    if r["mine"] or self.gate.s.whisper_only]
             text = " ".join(r["text"] for r in runs)
             if text:
                 self.hub.emit({"type": "partial", "text": text})
@@ -351,7 +368,8 @@ class Pipeline:
         owner_before = self.owner.owner
         finished = self.owner.observe(words)
         for run in self.owner.split(words, ev.get("text", ""), strict=True):
-            if run["mine"]:
+            # whisper mode: the gate already drops spoken voices, so any wearer's whisper counts
+            if run["mine"] or self.gate.s.whisper_only:
                 self.hub.emit({"type": "transcript", "speaker": "you", "speaker_id": run["speaker"],
                                "text": run["text"]})
                 self._pending.append(run["text"])
@@ -398,8 +416,8 @@ class Pipeline:
 
     async def run_command(self, command: str) -> None:
         typed = TYPE_PREFIX.match(command)
-        if typed:
-            await self._type(typed.group(1))  # dictation is typed as heard, not rewritten by cleanup
+        if typed or self.cfg.agent == "type":
+            await self._type(typed.group(1) if typed else command)  # typed as heard, not rewritten by cleanup
             return
         if self.cfg.cleanup and self.cfg.gemini_key:
             command = await self._clean(command)

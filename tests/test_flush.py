@@ -1,6 +1,6 @@
 """When a heard turn is acted on: partials keep it waiting, and in whisper mode an open gate cannot hold it for long.
 
-Times are scaled down (settle_s 0.3 s) so the suite stays fast; the rules are the same at the real 1.2 s.
+Times are scaled down (settle_s 0.3 s) so the suite stays fast; the rules are the same at the real default (Config.settle_s).
 """
 
 import asyncio

@@ -74,7 +74,7 @@ class FollowWindowStatusTests(unittest.IsolatedAsyncioTestCase):
 
         now = [100.0]
         hub = Hub()
-        pipeline = Pipeline(Config(stt="mock", follow_seconds=20), hub, engine_factory=lambda n: ClosingEngine(),
+        pipeline = Pipeline(Config(stt="mock", follow_seconds=20, wake_word=True), hub, engine_factory=lambda n: ClosingEngine(),
                             agent=FakeAgent(), clock=lambda: now[0])
         await pipeline.start()
         self.addAsyncCleanup(pipeline.shutdown)

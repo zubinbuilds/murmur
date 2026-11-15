@@ -29,7 +29,7 @@ class StrictFinalsTests(unittest.TestCase):
 class OwnerStatusTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.hub = Hub()
-        self.pipeline = Pipeline(Config(settle_s=60), self.hub, engine_factory=lambda n: None)
+        self.pipeline = Pipeline(Config(settle_s=60, whisper_only=False), self.hub, engine_factory=lambda n: None)
 
     async def asyncTearDown(self):
         await self.pipeline.shutdown()
