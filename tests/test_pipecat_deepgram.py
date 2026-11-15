@@ -123,8 +123,28 @@ class PipecatDeepgramTests(unittest.IsolatedAsyncioTestCase):
                                   ".venv/bin/python scripts/check_keys.py"])
         self.assertIn("closed", [e["type"] for e in events])
 
+    def test_keyterms_reach_the_deepgram_service_settings(self):
+        from server.stt.pipecat_deepgram import _deepgram_service
+
+        service = _deepgram_service("placeholder", ("Murmur", "Vexo band"))  # building it makes no network call
+        self.assertEqual(service._build_connect_kwargs()["keyterm"], ["Murmur", "Vexo band"])
+        self.assertNotIn("keyterm", _deepgram_service("placeholder", ())._build_connect_kwargs())
+
+    def test_the_raw_engine_sends_one_keyterm_parameter_per_term(self):
+        from server.stt.deepgram import PARAMS, DeepgramSTT
+
+        params = DeepgramSTT("k", keyterms=("Murmur", "Vexo band")).params
+        self.assertEqual([v for k, v in params if k == "keyterm"], ["Murmur", "Vexo band"])
+        self.assertEqual(DeepgramSTT("k").params, list(PARAMS.items()))
+
+    def test_make_engine_passes_the_configured_keyterms(self):
+        from server.config import Config
+
+        cfg = Config(deepgram_key="k", keyterms=("Murmur",))
+        self.assertEqual([v for k, v in make_engine("deepgram", cfg).params if k == "keyterm"], ["Murmur"])
+
     async def test_missing_key_says_how_to_fix_it(self):
-        engine = make_engine("pipecat", SimpleNamespace(deepgram_key=""))
+        engine = make_engine("pipecat", SimpleNamespace(deepgram_key="", keyterms=()))
         self.assertIsInstance(engine, PipecatDeepgramSTT)
         with self.assertRaises(STTError) as caught:
             await engine.start(lambda ev: None)

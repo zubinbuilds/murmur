@@ -20,9 +20,10 @@ RATE = 16000
 class PipecatDeepgramSTT(STTEngine):
     name = "pipecat"
 
-    def __init__(self, api_key: str, make_service: Optional[Callable] = None) -> None:
+    def __init__(self, api_key: str, make_service: Optional[Callable] = None, keyterms=()) -> None:
         self.api_key = api_key
-        self._make_service = make_service or _deepgram_service  # tests pass a fake processor
+        # tests pass a fake processor
+        self._make_service = make_service or (lambda key: _deepgram_service(key, keyterms))
         self._worker = None
         self._task: Optional[asyncio.Task] = None
         self._on_event: Optional[OnEvent] = None
@@ -92,10 +93,12 @@ class PipecatDeepgramSTT(STTEngine):
                 self._task.cancel()
 
 
-def _deepgram_service(api_key: str):
+def _deepgram_service(api_key: str, keyterms=()):
     from pipecat.services.deepgram.stt import DeepgramSTTService
 
-    return DeepgramSTTService(api_key=api_key, settings=DeepgramSTTService.Settings(diarize=True))
+    # Pipecat sends a list as repeated keyterm parameters and leaves None out
+    settings = DeepgramSTTService.Settings(diarize=True, keyterm=list(keyterms) or None)
+    return DeepgramSTTService(api_key=api_key, settings=settings)
 
 
 def _collector(on_event: OnEvent):

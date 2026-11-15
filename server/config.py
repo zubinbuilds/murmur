@@ -62,6 +62,7 @@ class Config:
     mic_device: str = ""  # input device name when transport is "mic"; empty means the system default
     serial_port: str = ""  # USB port when transport is "serial", e.g. /dev/cu.usbmodem101; empty lets the kit find the band
     replay_path: str = ""  # WAV played in real time when transport is "replay" (--replay)
+    keyterms: tuple = ("Murmur",)  # Deepgram Nova-3 keyterm prompting: words and phrases to recognise more readily
     agent: str = "instinct"  # instinct (texted over iMessage) | gemini (Gemini answers on this Mac)
     gemini_key: str = ""
     gemini_model: str = "gemini-4-hydrogen"
@@ -87,6 +88,7 @@ class Config:
             instinct_to=_get("INSTINCT_IMESSAGE_TO"),
             dry_run=_get("MURMUR_DRY_RUN", "1").lower() not in ("0", "false", "no", "off"),
             wake_aliases=aliases or ("murmur",),
+            keyterms=tuple(t.strip() for t in _get("MURMUR_KEYTERMS", "Murmur").split(",") if t.strip()),
             mic_gain_db=_num("MURMUR_MIC_GAIN_DB", 20.0),
             toggle_gesture=_get("MURMUR_TOGGLE_GESTURE", "double-tap").lower(),
             tap_threshold=_num("MURMUR_TAP_THRESHOLD", 1.2),

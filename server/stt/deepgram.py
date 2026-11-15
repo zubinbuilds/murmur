@@ -55,8 +55,10 @@ def parse_message(msg: dict) -> list:
 class DeepgramSTT(STTEngine):
     name = "deepgram"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, keyterms=()) -> None:
         self.api_key = api_key
+        # https://developers.deepgram.com/docs/keyterm: one repeated keyterm parameter per word or phrase
+        self.params = list(PARAMS.items()) + [("keyterm", t) for t in keyterms]
         self._session: Optional[aiohttp.ClientSession] = None
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._task: Optional[asyncio.Task] = None
@@ -71,7 +73,7 @@ class DeepgramSTT(STTEngine):
         self._session = aiohttp.ClientSession()
         try:
             self._ws = await self._session.ws_connect(
-                URL, params=PARAMS, headers={"Authorization": f"Token {self.api_key}"}, heartbeat=20,
+                URL, params=self.params, headers={"Authorization": f"Token {self.api_key}"}, heartbeat=20,
                 max_msg_size=0)
         except Exception as e:
             await self._session.close()

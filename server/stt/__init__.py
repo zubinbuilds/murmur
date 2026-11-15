@@ -13,9 +13,9 @@ def make_engine(name: str, cfg) -> STTEngine:
     if name == "elevenlabs":
         return ElevenLabsSTT(cfg.elevenlabs_key)
     if name == "deepgram":
-        return DeepgramSTT(cfg.deepgram_key)
+        return DeepgramSTT(cfg.deepgram_key, keyterms=cfg.keyterms)
     if name == "pipecat":
-        return PipecatDeepgramSTT(cfg.deepgram_key)
+        return PipecatDeepgramSTT(cfg.deepgram_key, keyterms=cfg.keyterms)
     if name == "mock":
         return MockSTT()
     raise STTError(f"Unknown speech engine {name!r}. Choose one of: {', '.join(ENGINES)}.")
