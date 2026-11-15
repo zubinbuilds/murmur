@@ -4,7 +4,7 @@ Whisper to your AI agent from a retainer-sized Bluetooth microphone in your mout
 
 You whisper. A tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's firmware) streams
 the sound to your laptop. A localhost web app shows a live transcript of **only your
-whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
+whispers**, and takes each one as a command: it texts it to
 [Instinct](https://instinct.com), an agent with a computer that you talk to over iMessage.
 
 ```
@@ -20,7 +20,7 @@ whispers**, and when a turn starts with **"Hey Murmur"** it texts the rest to
 
 ## Status
 
-Built and tested against the Vexo kit's pretend band, with a mock speech engine: 158 automated
+Built and tested against the Vexo kit's pretend band, with a mock speech engine: 194 automated
 tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
 the real band over Bluetooth, sending an iMessage,
 and whether the whisper gate separates your whisper from loud music in a real room. See
@@ -67,6 +67,39 @@ Backup without the band, with a mic plugged into the Mac:
 .venv/bin/python -m server --mic DEVICE --engine pipecat
 ```
 
+## On another Mac, over Bluetooth
+
+For the band in a retainer, connected to a Mac that has never run Murmur:
+
+1. Clone this repo, run `./scripts/setup.sh`, and put `DEEPGRAM_API_KEY` in `.env` (the Pipecat
+   engine uses Deepgram). Set `MURMUR_BAND` to the number on the band's bag.
+2. Stop every other program using the band: the Vexo dashboard, a Murmur server on another
+   laptop, anything on its USB cable. Over Bluetooth the band takes one connection and cannot be
+   found while it has one. A program on the cable shares the band, and each stream goes to
+   whichever program started it last.
+3. Double-tap the band. Its light blinks blue and it can be found for 60 seconds.
+4. Start the server. Bluetooth is the default (`MURMUR_TRANSPORT=ble`):
+
+   ```bash
+   .venv/bin/python -m server --engine pipecat
+   ```
+
+   If macOS asks whether Terminal may use Bluetooth, say yes (or switch it on under System
+   Settings, Privacy & Security, Bluetooth, then restart Terminal).
+
+Once connected, a double-tap toggles listening. If the link drops, the server reconnects by
+itself; for 2 minutes after a drop the band can be found without a double-tap.
+
+Before the demo, with the band in the retainer, run the 40 s guided check over Bluetooth. It
+tells you when to whisper, talk and stay quiet, then prints what the gate let through:
+
+```bash
+.venv/bin/python scripts/guided_recording.py ble
+```
+
+Not yet tried: Bluetooth from any Mac. Our one attempt said "Could not see Vexo-HACK-82", and
+we did not find out why.
+
 ## How it works
 
 **Only your whispers.** Three layers, because no single one is enough.
@@ -78,21 +111,26 @@ Backup without the band, with a mic plugged into the Mac:
    stream keeps its timing and its connection. In voice mode, calibrate it in the page: record the room
    for 3 s (with the music on if there will be music), then whisper for 3 s. It picks a
    threshold between them, and tells you if they are too close to separate.
-3. **Diarization plus an owner filter** (`server/owner.py`). The service labels speakers; the
-   first speaker in a session is you (or press **Enroll me** to pick the one who
-   speaks most). Words from anyone else are dropped before the transcript and the agent see
-   them.
+3. **Diarization plus an owner filter** (`server/owner.py`), in voice mode only. The service
+   labels speakers; the first speaker in a session is you (or press **Enroll me** to pick the
+   one who speaks most). Words from anyone else are dropped before the transcript and the agent
+   see them. In whisper mode the gate already drops spoken voices, so anyone wearing the band
+   counts as you.
 
 **Turn detection** is the same state machine as the gate: a turn starts when the level stays
-above the threshold for 60 ms and ends after 700 ms of quiet (`MURMUR_TURN_SILENCE_MS`). At the
-end of a turn we tell the speech service to commit what it has heard. Output is delayed 200 ms
-so the first syllable is not clipped. (Those are voice mode's numbers; whisper mode waits
-200 ms and delays 300 ms.)
+above the threshold for 60 ms and ends after 600 ms of quiet (`MURMUR_TURN_SILENCE_MS`). At the
+end of a turn we tell the speech service to commit what it has heard, and act on the turn
+0.3 s after its last words arrive (`MURMUR_SETTLE_S`). Our own wait before a command is
+900 ms (it was 1900 ms). A shorter quiet cut the owner's recorded whisper in two: 500 ms
+made two turns of it, 600 ms keeps one. Output is delayed 200 ms so the first
+syllable is not clipped. (In whisper mode a turn opens after 200 ms and output is delayed
+300 ms.)
 
-**"Hey Murmur"** (`server/wake.py`). A turn must start with "Hey Murmur" (aliases in
-`MURMUR_WAKE_ALIASES`, for recognisers that mishear it). Everything after is the command.
-Saying only "Hey Murmur" arms the next turn for 8 s, so you can pause. Nothing else is ever
-sent anywhere.
+**Commands** (`server/wake.py`). Every turn is a command; a "Hey Murmur" at the start is
+dropped. With `MURMUR_WAKE_WORD=1` a turn must start with "Hey Murmur" (aliases in
+`MURMUR_WAKE_ALIASES`, for recognisers that mishear it), and nothing else is sent anywhere.
+Then saying only "Hey Murmur" arms the next turn for 8 s, and after a command the next turns
+count too until 20 s pass quietly (`MURMUR_FOLLOW_SECONDS`).
 
 **Toggling listening.** A double tap on the band (its motion sensor) toggles listening. Change
 the gesture with `MURMUR_TOGGLE_GESTURE`. Whether a tap on a cheek-mounted board registers is
@@ -115,12 +153,14 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
   nothing leaves your machine. Set it to `0` only when you mean it.
 - macOS asks once whether your terminal may control Messages. Reading replies needs Full
   Disk Access for your terminal.
-- Dry run stops only the iMessage. Gemini, typing and spoken replies still run.
+- Dry run stops only the iMessage. Gemini, typing, spoken replies and your own program still run.
 
 **Also built:**
 
 - **Gemini 4** (`server/gemini.py`): with `GEMINI_API_KEY`, tidies each command; `MURMUR_AGENT=gemini` answers it on the Mac instead of Instinct.
-- **Typing** (`server/typer.py`): "Hey Murmur, type ..." types into the app in front (needs Accessibility permission).
+- **Typing** (`server/typer.py`): "type ..." types into the app in front (needs Accessibility permission); `MURMUR_AGENT=type` types every command.
+- **Ready-made vocabulary** (`server/vocab.py`, Deepgram and Pipecat engines): words to recognise more readily, from `MURMUR_KEYTERMS`, your own list (`MURMUR_VOCAB_FILE`, one term per line), the bundled `server/vocab.txt` (`MURMUR_VOCAB=0` leaves it out) and, with `MURMUR_VOCAB_APPS=1`, the names of the apps in `/Applications` (off, because the names go to the speech service). At most 50 terms.
+- **Your own program** (`MURMUR_AGENT=command`, `MURMUR_AGENT_CMD`): runs it once per command, with the command as its last argument; what it prints is the reply. No shell runs it.
 - **Replies aloud** (`server/voice.py`): set `MURMUR_VOICE_DEVICE`; ElevenLabs or Deepgram through Pipecat (`MURMUR_TTS`).
 - **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
 - **Clear** (a button on the page): empties the transcript on every open page.
