@@ -93,6 +93,7 @@ class WhisperGate:
         self.s = settings or GateSettings()
         self.floor_db = -70.0
         self._levels: deque = deque(maxlen=FLOOR_WINDOW_FRAMES)
+        self._voiced_levels: deque = deque(maxlen=FLOOR_WINDOW_FRAMES)  # whisper mode: only for the warm-up
         self.stats: Counter = Counter()  # frames, above, voiced, passed; the pipeline reads and clears it
         self._delay: deque = deque()  # [frame, passed] pairs, oldest first
         self._open = False
@@ -121,12 +122,17 @@ class WhisperGate:
     def _frames(ms: int) -> int:
         return max(1, round(ms / FRAME_MS))
 
-    def _track_floor(self, db: float) -> None:
-        """Runs open or closed: a floor learned only while closed froze when a band's own noise held the gate open."""
+    def _track_floor(self, db: float, voiced: bool = False) -> None:
+        """Runs open or closed: a floor learned only while closed froze when a band's own noise held the gate open.
+
+        Voiced frames stay out of the floor (whisper mode): nearby talk lifted it 6 dB in 9 s on the owner's band.
+        """
         if db > DIGITAL_SILENCE_DB:
-            self._levels.append(db)
+            (self._voiced_levels if voiced else self._levels).append(db)
         if len(self._levels) >= FLOOR_WARMUP_FRAMES:
             self.floor_db = float(np.percentile(self._levels, 10))
+        elif len(self._levels) + len(self._voiced_levels) >= FLOOR_WARMUP_FRAMES:  # only talk heard so far
+            self.floor_db = float(np.percentile(list(self._levels) + list(self._voiced_levels), 10))
 
     def process(self, frame: bytes, body: Optional[bool] = None) -> GateOutput:
         """body: the own-voice gate's verdict, or None when it is not in use. While it is False a frame
@@ -134,15 +140,15 @@ class WhisperGate:
         if len(frame) != FRAME_BYTES:
             frame = (frame + SILENCE)[:FRAME_BYTES]
         db = frame_db(frame)
-        self._track_floor(db)
-        above = db > self.threshold
-        loud = above and body is not False
-        self.stats["frames"] += 1
-        self.stats["above"] += above
         samples = np.frombuffer(frame, dtype=np.int16)
         whisper = self.s.whisper_only
         voiced = whisper and voicing(np.concatenate([self._prev, samples])) > VOICED_PEAK
         self._prev = samples
+        self._track_floor(db, voiced)
+        above = db > self.threshold
+        loud = above and body is not False
+        self.stats["frames"] += 1
+        self.stats["above"] += above
         self._voiced_run = self._voiced_run + 1 if voiced else 0
         sustained = self._frames(VOICED_RUN_MS)
         if self._voiced_run >= sustained:  # someone talking: silence the run back to its start, and it is quiet

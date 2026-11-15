@@ -38,6 +38,22 @@ class BandFloorTests(unittest.TestCase):
             gate.process(bytes(FRAME_BYTES))
         self.assertAlmostEqual(gate.floor_db, -34, delta=1.5)
 
+    def test_nearby_talk_does_not_lift_the_whisper_mode_floor(self):
+        """Live 16:04: 9 s of people talking lifted the floor 6 dB and the owner's whisper stopped clearing it."""
+        t = np.arange(FRAME_SAMPLES * 450) / 16000
+        talk = sum(np.sin(2 * np.pi * 140 * h * t) / h for h in range(1, 12))
+        talk = (talk / np.sqrt(np.mean(talk ** 2)) * 32768 * 10 ** (-20 / 20)).astype(np.int16)
+        talk_frames = [talk[i:i + FRAME_SAMPLES].tobytes() for i in range(0, len(talk), FRAME_SAMPLES)]
+        floors = {}
+        for whisper_only in (True, False):
+            gate = WhisperGate(GateSettings(whisper_only=whisper_only))
+            self.settle(gate)
+            for f in talk_frames:
+                gate.process(f)
+            floors[whisper_only] = gate.floor_db
+        self.assertAlmostEqual(floors[True], -34, delta=1.5)  # the room's floor, held through the talk
+        self.assertGreater(floors[False], -25)  # voice mode: talk is the room, as before
+
     def test_calibration_overrides_the_learned_floor(self):
         gate = WhisperGate()
         self.settle(gate)
