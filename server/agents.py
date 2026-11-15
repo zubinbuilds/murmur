@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -77,7 +78,49 @@ class GeminiAgent:
         return AgentResult("sent", "Asked Gemini.")
 
 
+COMMAND_TIMEOUT_S = 60
+REPLY_LIMIT = 2000  # characters of stdout kept as the reply
+
+
+class CommandAgent:
+    """Runs a program per command (MURMUR_AGENT_CMD), the command as its last argument; stdout is the reply.
+    It is an explicit choice, so dry run does not block it."""
+
+    def __init__(self, argv: list, timeout: float = COMMAND_TIMEOUT_S) -> None:
+        self.argv, self.timeout = argv, timeout
+        self._on_reply: Optional[Callable[[str, str], None]] = None
+
+    async def start(self, on_reply: Callable[[str, str], None], on_error: Callable[[str], None]) -> None:
+        self._on_reply = on_reply
+
+    async def stop(self) -> None:
+        return None
+
+    async def send(self, command: str) -> AgentResult:
+        name = self.argv[0]
+        proc = await asyncio.create_subprocess_exec(*self.argv, command, stdin=asyncio.subprocess.DEVNULL,
+                                                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), self.timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(f"{name} ran past {self.timeout:g} s and was stopped.")
+        if proc.returncode:
+            tail = err.decode(errors="replace").strip()[-300:]
+            raise RuntimeError(f"{name} exited with {proc.returncode}" + (f": {tail}" if tail else "."))
+        reply = out.decode(errors="replace").strip()[:REPLY_LIMIT]
+        if reply and self._on_reply:
+            self._on_reply(reply, "agent")
+        return AgentResult("sent", f"Ran {name}.")
+
+
 def make_agent(cfg):
+    if cfg.agent == "command":
+        argv = shlex.split(cfg.agent_cmd)
+        return CommandAgent(argv) if argv else DryRunAgent("MURMUR_AGENT_CMD is not set")
+    if cfg.agent == "type":
+        return DryRunAgent("commands are typed, not sent")  # Pipeline.run_command types them
     if cfg.agent == "gemini":
         if not cfg.gemini_key:
             return DryRunAgent("GEMINI_API_KEY is not set")
