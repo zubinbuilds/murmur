@@ -54,7 +54,7 @@ class Pipeline:
             threshold_db=cfg.gate_threshold_db, margin_db=cfg.gate_margin_db, hangover_ms=cfg.turn_silence_ms,
             whisper_only=cfg.whisper_only))
         self.owner = OwnerFilter()
-        self.wake = WakeGate(cfg.wake_aliases, clock=clock)
+        self.wake = WakeGate(cfg.wake_aliases, clock=clock, follow_seconds=cfg.follow_seconds)
         self.agent = agent or make_agent(cfg)
         self.voice = make_voice(cfg, hub)
         self.engine = None
@@ -165,6 +165,8 @@ class Pipeline:
                            "body_energy": round(body.energy, 5) if body else None,
                            "body_floor": round(body.floor, 5) if body else None})
             stats.clear()
+            if self.wake.armed != self.hub.state.get("armed"):  # the follow-up window lapsed: tell the page
+                self.status()
         if self._calibration is not None:
             self._collect(out.db)
         now = self.clock()

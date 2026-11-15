@@ -12,14 +12,17 @@ class WakeGate:
 
     "Hey Murmur, email Sam" runs "email Sam". Saying just "Hey Murmur" arms the gate: the next
     turn within `arm_seconds` is taken as the command, so you can pause after the wake phrase.
+    After a command the gate stays armed for `follow_seconds`, so you can keep going without the
+    wake phrase; each follow-up renews the window. 0 turns that off.
     """
 
     def __init__(self, aliases: Iterable[str] = ("murmur", "murmurs", "murmer"), arm_seconds: float = 8.0,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, follow_seconds: float = 0.0) -> None:
         names = "|".join(re.escape(a.strip()) for a in aliases if a.strip()) or "murmur"
         # smart_format can write the name as a possessive ("Hey Murmur's"); the "s" is not part of the command
         self._pattern = re.compile(rf"^\W*hey\W+(?:{names})(?:['’]s)?\b\W*(?P<rest>.*)$", re.IGNORECASE | re.DOTALL)
         self.arm_seconds = arm_seconds
+        self.follow_seconds = follow_seconds
         self._clock = clock
         self._armed_until = 0.0
 
@@ -30,6 +33,9 @@ class WakeGate:
     def disarm(self) -> None:
         self._armed_until = 0.0
 
+    def _after_command(self) -> None:
+        self._armed_until = self._clock() + self.follow_seconds if self.follow_seconds > 0 else 0.0
+
     def feed(self, text: str) -> Optional[str]:
         text = (text or "").strip()
         if not text:
@@ -38,11 +44,11 @@ class WakeGate:
         if match:
             rest = match.group("rest").strip()
             if rest:
-                self.disarm()
+                self._after_command()
                 return rest
             self._armed_until = self._clock() + self.arm_seconds
             return None
         if self.armed:
-            self.disarm()
+            self._after_command()
             return text
         return None

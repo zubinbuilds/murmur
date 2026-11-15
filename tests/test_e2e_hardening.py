@@ -68,6 +68,24 @@ class ReconnectTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(e["type"] == "note" and "restored" in e["text"] for e in self.hub.events))
 
 
+class FollowWindowStatusTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_page_hears_when_the_follow_up_window_lapses(self):
+        from server.pipeline import GATE_STATS_FRAMES
+
+        now = [100.0]
+        hub = Hub()
+        pipeline = Pipeline(Config(stt="mock", follow_seconds=20), hub, engine_factory=lambda n: ClosingEngine(),
+                            agent=FakeAgent(), clock=lambda: now[0])
+        await pipeline.start()
+        self.addAsyncCleanup(pipeline.shutdown)
+        await pipeline.inject("Hey Murmur, text Sam")
+        self.assertTrue(hub.state["armed"])
+        now[0] += 21
+        for _ in range(GATE_STATS_FRAMES):
+            await pipeline.on_pcm(bytes(640))
+        self.assertFalse(hub.state["armed"])
+
+
 class HostileMessageTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         from aiohttp.test_utils import TestClient, TestServer

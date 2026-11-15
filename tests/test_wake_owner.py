@@ -34,6 +34,26 @@ class WakeTests(unittest.TestCase):
         self.assertFalse(self.wake.armed)
         self.assertIsNone(self.wake.feed("and something else"))
 
+    def test_after_a_command_plain_turns_are_commands_until_the_window_lapses(self):
+        wake = WakeGate(("murmur",), clock=self.clock, follow_seconds=20)
+        self.assertEqual(wake.feed("Hey Murmur, text Sam I'm late"), "text Sam I'm late")
+        self.clock.t += 5
+        self.assertEqual(wake.feed("and say sorry"), "and say sorry")  # no wake phrase needed
+        self.clock.t += 15  # 20 s after the first command, but each follow-up renews the window
+        self.assertEqual(wake.feed("thanks"), "thanks")
+        self.clock.t += 19
+        self.assertTrue(wake.armed)
+        self.clock.t += 2  # 21 s of quiet
+        self.assertFalse(wake.armed)
+        self.assertIsNone(wake.feed("this is just chatter"))
+        self.assertEqual(wake.feed("Hey Murmur's, call Mum"), "call Mum")  # the wake phrase still works
+
+    def test_follow_seconds_zero_keeps_one_command_per_wake_phrase(self):
+        wake = WakeGate(("murmur",), clock=self.clock, follow_seconds=0)
+        self.assertEqual(wake.feed("Hey, Murmur. Email Sam."), "Email Sam.")
+        self.assertFalse(wake.armed)
+        self.assertIsNone(wake.feed("and say sorry"))
+
     def test_armed_state_times_out(self):
         self.wake.feed("hey murmur")
         self.clock.t += 9

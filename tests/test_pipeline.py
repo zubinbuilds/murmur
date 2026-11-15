@@ -56,6 +56,7 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         return [e for e in self.hub.events if e["type"] == kind]
 
     async def test_prefixed_whisper_reaches_the_agent_and_plain_speech_does_not(self):
+        self.pipeline.wake.follow_seconds = 0  # the wake-phrase rule alone; the follow-up window is tested in test_wake_owner
         await self.pipeline.set_listening(True)
         await self.whisper_turn()
         self.assertEqual(self.agent.sent, ["email Sam that I am late"])
