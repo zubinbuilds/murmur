@@ -1,78 +1,69 @@
 # Murmur
 
-Whisper to your AI agent from a retainer-sized Bluetooth microphone in your mouth.
+Whisper commands to your computer from a microphone in your mouth.
 
-You whisper. A tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's firmware) streams
-the sound to your laptop. A localhost web app shows a live transcript of **only your
-whispers**, and takes each one as a command: it texts it to
-[Instinct](https://instinct.com), an agent with a computer that you talk to over iMessage.
+You whisper, and the mic on a tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's
+firmware) sits in your mouth and hears it. A page on your laptop shows a live transcript of
+only your whispers. People talking out loud next to you are dropped before any speech service
+hears them. Each whisper is a command: Murmur can type it into the app in front, hand it to
+your own program (for computer use), text it to [Instinct](https://instinct.com) or have
+Gemini answer it.
 
 ```
- band mic ──BLE──▶ Python server ──▶ whisper gate ──▶ speech engine ──▶ owner filter
- (Opus, 16 kHz)    (Vexo kit)        + turn detection   ElevenLabs Scribe    only you
-                                                        v3 Live or Deepgram
-                                                        (both diarize)
-                                                                │
-        Instinct ◀──iMessage── "Hey Murmur" check ◀── turn assembly ◀┘
-           │                                             │
-           └──── replies read back ──▶ localhost web UI ◀┘
+ band mic ──USB or BLE──▶ Python server ──▶ whisper gate ──▶ speech engine ──────────▶ turn
+ (16 kHz)                 (Vexo kit)        drops pitched    Deepgram Nova-3 through     │
+                                            voices           Pipecat, or ElevenLabs      │
+                                                             Scribe                      ▼
+             localhost page ◀── transcript, replies ◀───────────────────────────── command
+                                                                                         │
+                                                       agent: type, your program, ◀──────┘
+                                                       Instinct or Gemini
 ```
 
-## Status
+## What works today
 
-Built and tested against the Vexo kit's pretend band, with a mock speech engine: 194 automated
-tests pass, and the page runs end to end. **Not yet tried with live services or hardware:**
-the real band over Bluetooth, sending an iMessage,
-and whether the whisper gate separates your whisper from loud music in a real room. See
-[What is unproven](#what-is-unproven).
+Run live:
 
-Run live on event day: the real band over USB, transcribed by Deepgram through Pipecat. All
-three speech engines and both voices (ElevenLabs, Deepgram) were also called live with recorded
-files, the voices into a silent output. Not run live: Gemini (no key), texting Instinct, typing
-into another app, spoken replies inside the app, and the band over Bluetooth (our one try did
-not find it).
+- The real band over its USB cable, transcribed by Deepgram Nova-3 through Pipecat.
+- All three speech engines and both voices (ElevenLabs, Deepgram), on recorded files. The
+  voices played into a silent output.
+
+Not run live yet: the band over Bluetooth, Gemini (no key), texting Instinct, typing into
+another app, the command agent and spoken replies inside the app.
+
+Measured on one 40 s recording from the band in one room, the whisper gate was open for 99% of
+the owner's whisper and 0% of the room noise, the owner's normal voice and the person talking
+next to them. 194 automated tests pass, with no network and no audio devices.
 
 ## Quickstart
 
-You need macOS and Python 3.11+. The page is plain HTML and works in any modern browser.
+You need macOS and Python 3.11+.
 
 ```bash
 ./scripts/setup.sh          # clones the Vexo kit, makes .venv, installs dependencies, creates .env
-open .env                   # paste ELEVENLABS_API_KEY and/or DEEPGRAM_API_KEY
-.venv/bin/python -m server --sim --engine mock    # no hardware, no keys
+open .env                   # paste DEEPGRAM_API_KEY (and ELEVENLABS_API_KEY if you use it)
 ```
 
-Open <http://127.0.0.1:8000>. Press **Start**: the pretend band replays a recording,
-and the mock engine shows a placeholder transcript. Type `Hey Murmur, email Sam I'm late` into
-"Test without speaking" to see the agent path (it only shows what it would send).
+No hardware, no keys:
 
-With the real band (number 82, so `Vexo-HACK-82`):
+```bash
+.venv/bin/python -m server --sim --engine mock
+```
 
-1. Close the Vexo dashboard tab if it is open. The band accepts one Bluetooth connection.
-2. **Double-tap the band** so it can be found for 60 seconds.
-3. `.venv/bin/python -m server --engine elevenlabs` (or `--engine deepgram`).
-4. Press **Start**. In voice mode, calibrate the gate (below) first; whisper mode does not need it.
+Open <http://127.0.0.1:8000> and press **Start**. The pretend band replays a recording and the
+mock engine shows a placeholder transcript. To try a command without speaking, open **Settings**
+and type `email Sam I'm late` into the test box: it lands in the transcript the way a whisper
+would.
 
-The band's number is `MURMUR_BAND` in `.env`. The engine can also be switched in the page.
-
-With the band on its USB cable (the port name differs per Mac; find it with `ls /dev/cu.usbmodem*`):
+The band on its USB cable (find the port name with `ls /dev/cu.usbmodem*`; it differs per Mac):
 
 ```bash
 .venv/bin/python -m server --usb /dev/cu.usbmodem101 --engine pipecat
 ```
 
-Backup without the band, with a mic plugged into the Mac:
+The band over Bluetooth, for example in a retainer on a Mac that has never run Murmur:
 
-```bash
-.venv/bin/python -m server --mic DEVICE --engine pipecat
-```
-
-## On another Mac, over Bluetooth
-
-For the band in a retainer, connected to a Mac that has never run Murmur:
-
-1. Clone this repo, run `./scripts/setup.sh`, and put `DEEPGRAM_API_KEY` in `.env` (the Pipecat
-   engine uses Deepgram). Set `MURMUR_BAND` to the number on the band's bag.
+1. Set `MURMUR_BAND` in `.env` to the number on the band's bag (82 is `Vexo-HACK-82`).
 2. Stop every other program using the band: the Vexo dashboard, a Murmur server on another
    laptop, anything on its USB cable. Over Bluetooth the band takes one connection and cannot be
    found while it has one. A program on the cable shares the band, and each stream goes to
@@ -90,145 +81,148 @@ For the band in a retainer, connected to a Mac that has never run Murmur:
 Once connected, a double-tap toggles listening. If the link drops, the server reconnects by
 itself; for 2 minutes after a drop the band can be found without a double-tap.
 
-Before the demo, with the band in the retainer, run the 40 s guided check over Bluetooth. It
-tells you when to whisper, talk and stay quiet, then prints what the gate let through:
+Before a demo, run the 40 s guided check with the band in your mouth. It tells you when to stay
+quiet, whisper, talk and let someone else talk, then prints what the gate let through. Give it
+the USB port, or `ble`:
 
 ```bash
 .venv/bin/python scripts/guided_recording.py ble
 ```
 
-Not yet tried: Bluetooth from any Mac. Our one attempt said "Could not see Vexo-HACK-82", and
-we did not find out why.
+Without the band, a mic plugged into the Mac works too: `--mic DEVICE`.
 
 ## How it works
 
-**Only your whispers.** Three layers, because no single one is enough.
+**Whisper mode** (`server/gate.py`, the default). A whisper has no pitch and nearby talk does.
+The gate checks each 20 ms frame for pitch between 70 and 400 Hz. A turn opens after 200 ms of
+unpitched sound 5 dB over the room, and 100 ms of pitch in a row is silenced. Gated audio is
+replaced with silence, so the speech service never hears it but the stream keeps its timing.
+Output is delayed 300 ms so the first syllable gets through. Anyone whispering into the band
+counts as you.
 
-1. **The mic is on you.** The band's microphone is in your mouth, so your whisper reaches it
-   far louder than a room does.
-2. **A level gate** (`server/gate.py`) drops everything below a threshold, 20 ms at a time. Gated
-   audio is replaced with silence, not removed, so the speech service never hears it but the
-   stream keeps its timing and its connection. In voice mode, calibrate it in the page: record the room
-   for 3 s (with the music on if there will be music), then whisper for 3 s. It picks a
-   threshold between them, and tells you if they are too close to separate.
-3. **Diarization plus an owner filter** (`server/owner.py`), in voice mode only. The service
-   labels speakers; the first speaker in a session is you (or press **Enroll me** to pick the
-   one who speaks most). Words from anyone else are dropped before the transcript and the agent
-   see them. In whisper mode the gate already drops spoken voices, so anyone wearing the band
-   counts as you.
+**Turns.** A turn ends after 600 ms of quiet (`MURMUR_TURN_SILENCE_MS`). Murmur then tells the
+speech service to commit and acts 0.3 s after the last words arrive (`MURMUR_SETTLE_S`). That is
+900 ms of Murmur's own waiting after your last sound; the speech service's time comes on top.
+600 ms is the shortest quiet that kept the owner's recorded whisper as one turn; 500 ms split
+it in two.
 
-**Turn detection** is the same state machine as the gate: a turn starts when the level stays
-above the threshold for 60 ms and ends after 600 ms of quiet (`MURMUR_TURN_SILENCE_MS`). At the
-end of a turn we tell the speech service to commit what it has heard, and act on the turn
-0.3 s after its last words arrive (`MURMUR_SETTLE_S`). Our own wait before a command is
-900 ms (it was 1900 ms). A shorter quiet cut the owner's recorded whisper in two: 500 ms
-made two turns of it, 600 ms keeps one. Output is delayed 200 ms so the first
-syllable is not clipped. (In whisper mode a turn opens after 200 ms and output is delayed
-300 ms.)
+**Commands** (`server/wake.py`). Every turn is a command, and a "Hey Murmur" at the start is
+dropped. With `MURMUR_WAKE_WORD=1` a turn must start with "Hey Murmur" and nothing else is
+sent. Then saying only "Hey Murmur" arms the next turn for 8 s, and after a command the next
+turns count too until 20 s pass quietly (`MURMUR_FOLLOW_SECONDS`).
 
-**Commands** (`server/wake.py`). Every turn is a command; a "Hey Murmur" at the start is
-dropped. With `MURMUR_WAKE_WORD=1` a turn must start with "Hey Murmur" (aliases in
-`MURMUR_WAKE_ALIASES`, for recognisers that mishear it), and nothing else is sent anywhere.
-Then saying only "Hey Murmur" arms the next turn for 8 s, and after a command the next turns
-count too until 20 s pass quietly (`MURMUR_FOLLOW_SECONDS`).
+**Speech engines** (`server/stt/`). The real ones stream 16 kHz PCM and return word-level
+speaker labels.
 
-**Toggling listening.** A double tap on the band (its motion sensor) toggles listening. Change
-the gesture with `MURMUR_TOGGLE_GESTURE`. Whether a tap on a cheek-mounted board registers is
-untested; `MURMUR_TAP_THRESHOLD` sets the sensitivity.
+| Engine | Model | Turn end |
+|---|---|---|
+| `pipecat` | Deepgram Nova-3 through Pipecat | `Finalize` message |
+| `deepgram` | Deepgram Nova-3 | `Finalize` message |
+| `elevenlabs` | Scribe v3 Live (`scribe_v3_live`) | manual commit |
+| `mock` | none, for testing | |
 
-**Speech engines** (`server/stt/`). Both stream 16 kHz PCM and return word-level speaker labels.
-Add another by implementing `STTEngine` in `server/stt/base.py`.
+**Vocabulary** (`server/vocab.py`, Deepgram engines). Words to recognise more readily come from
+`MURMUR_KEYTERMS`, your own list (`MURMUR_VOCAB_FILE`, one term per line), the bundled
+`server/vocab.txt`, and with `MURMUR_VOCAB_APPS=1` the names of the apps in `/Applications`.
+At most 50 terms.
 
-| Engine | Model | Diarization | Turn end |
-|---|---|---|---|
-| ElevenLabs | Scribe v3 Live (`scribe_v3_live`) | `diarize=true` | manual commit |
-| Deepgram | Nova-3 | `diarize=true` | `Finalize` message |
-| Pipecat (`pipecat`) | Deepgram Nova-3 through Pipecat | `diarize=True` | `Finalize` message |
+**Agents** (`MURMUR_AGENT`, `server/agents.py`).
 
-**Instinct** (`server/agents.py`, `server/imessage.py`). Instinct is texted, so the bridge sends an
-iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
+| Value | What happens to a command |
+|---|---|
+| `instinct` (default) | With `MURMUR_DRY_RUN=1` (default) the page shows what would be sent and nothing leaves the Mac. With `0` and `INSTINCT_IMESSAGE_TO` set, it is texted to Instinct over iMessage and replies are read from `~/Library/Messages/chat.db`. |
+| `type` | Typed into the app in front (needs Accessibility permission). Saying "type ..." does the same with any agent. |
+| `command` | Runs `MURMUR_AGENT_CMD` once, with the command as its last argument and no shell. What it prints is the reply. |
+| `gemini` | Gemini (`GEMINI_API_KEY`) answers on the Mac. |
 
-- Set `INSTINCT_IMESSAGE_TO` to the number (like `+15551234567`) or Apple ID email you text.
-- **Dry run is on by default** (`MURMUR_DRY_RUN=1`): the page shows what would be sent and
-  nothing leaves your machine. Set it to `0` only when you mean it.
-- macOS asks once whether your terminal may control Messages. Reading replies needs Full
-  Disk Access for your terminal.
-- Dry run stops only the iMessage. Gemini, typing, spoken replies and your own program still run.
+With a Gemini key, each command is also tidied by Gemini first (`MURMUR_CLEANUP`). Replies can
+be spoken on an output device (`MURMUR_VOICE_DEVICE`) by ElevenLabs or Deepgram through Pipecat.
 
-**Also built:**
+**Voice mode** (`MURMUR_WHISPER_ONLY=0`, `--sim`, or the page's Settings). A level gate passes
+anything 14 dB over the room; calibrate it in the page (3 s of room, 3 s of whisper). The
+speech service labels speakers, and only the first one (or the one **Enroll me** picks) reaches
+the transcript.
 
-- **Gemini 4** (`server/gemini.py`): with `GEMINI_API_KEY`, tidies each command; `MURMUR_AGENT=gemini` answers it on the Mac instead of Instinct.
-- **Typing** (`server/typer.py`): "type ..." types into the app in front (needs Accessibility permission); `MURMUR_AGENT=type` types every command.
-- **Ready-made vocabulary** (`server/vocab.py`, Deepgram and Pipecat engines): words to recognise more readily, from `MURMUR_KEYTERMS`, your own list (`MURMUR_VOCAB_FILE`, one term per line), the bundled `server/vocab.txt` (`MURMUR_VOCAB=0` leaves it out) and, with `MURMUR_VOCAB_APPS=1`, the names of the apps in `/Applications` (off, because the names go to the speech service). At most 50 terms.
-- **Your own program** (`MURMUR_AGENT=command`, `MURMUR_AGENT_CMD`): runs it once per command, with the command as its last argument; what it prints is the reply. No shell runs it.
-- **Replies aloud** (`server/voice.py`): set `MURMUR_VOICE_DEVICE`; ElevenLabs or Deepgram through Pipecat (`MURMUR_TTS`).
-- **Mic backup** (`server/mic_source.py`): `--mic DEVICE` listens on a Mac input instead of the band.
-- **Clear** (a button on the page): empties the transcript on every open page.
-- **Tuning on a real recording**: `--record` saves the raw band audio as a WAV in `recordings/`; `scripts/guided_recording.py [USB PORT]` runs a guided 40 s recording, and `scripts/analyze_recording.py WAV --segments ...` shows what the gate makes of it.
-- **Whisper mode** (`server/gate.py`, the default; `MURMUR_WHISPER_ONLY=0`, `--sim` or the page's Settings switch give voice mode): a whisper has no pitch, nearby talk does. A turn opens after 200 ms of loud unpitched sound (5 dB over the room), and 100 ms of pitch in a row is silenced. On one 40 s recording, one room, the gate was open for 99% of the owner's whisper and 0% of the person next to them, room chatter and the owner's normal voice. Voice mode (14 dB over the room) on the same recording: whisper 57%, normal voice 100%, the other person 0%, room 7%.
-- **Own-voice motion** (`MURMUR_OWN_VOICE`, off): we measured the band's accelerometer as an own-voice sensor on that recording. No frequency band separated the wearer's speech (the band moves all the time), so it stays off.
+## Settings
+
+All in `.env` (see `.env.example`).
+
+| Variable | Default | |
+|---|---|---|
+| `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY` | empty | speech service keys |
+| `MURMUR_STT` | `elevenlabs` | `pipecat`, `deepgram`, `elevenlabs` or `mock`; `--engine` overrides it |
+| `MURMUR_BAND` | `82` | the number on the band's bag |
+| `MURMUR_TRANSPORT` | `ble` | `ble`, `serial` (`--usb`), `sim` (`--sim`) or `mic` (`--mic`) |
+| `MURMUR_SERIAL_PORT` | empty | USB port; empty lets the kit find the band |
+| `MURMUR_WHISPER_ONLY` | `1` | `0` for voice mode |
+| `MURMUR_WAKE_WORD` | `0` | `1` to require "Hey Murmur" |
+| `MURMUR_TURN_SILENCE_MS` | `600` | quiet that ends a turn |
+| `MURMUR_SETTLE_S` | `0.3` | wait after the last words before acting |
+| `MURMUR_AGENT` | `instinct` | `instinct`, `type`, `command` or `gemini` |
+| `MURMUR_AGENT_CMD` | empty | the program for `command` |
+| `MURMUR_DRY_RUN` | `1` | `0` lets the Instinct agent send |
+| `INSTINCT_IMESSAGE_TO` | empty | the number or Apple ID you text Instinct at |
+| `MURMUR_KEYTERMS` | `Murmur` | comma-separated words to recognise |
+| `MURMUR_VOCAB`, `MURMUR_VOCAB_FILE`, `MURMUR_VOCAB_APPS` | `1`, empty, `0` | the word list sources |
+| `MURMUR_TOGGLE_GESTURE` | `double-tap` | `tap`, `double-tap` or `none` |
+| `MURMUR_RECORD` | `0` | `1` saves the raw band audio to `recordings/` (or `--record`) |
+| `MURMUR_VOICE_DEVICE`, `MURMUR_TTS` | empty, `elevenlabs` | speak replies on this output |
+| `GEMINI_API_KEY` | empty | Gemini cleanup and the `gemini` agent |
 
 ## Privacy and safety
 
-- **Audio leaves your laptop** for ElevenLabs or Deepgram whenever you are listening. Only the
-  gated stream is sent, but the mic can pick up people near you.
-- Keys live in `.env`, which is git-ignored. Never commit it.
+- Audio leaves your laptop for Deepgram or ElevenLabs while you listen. Only the gated stream is
+  sent, but the mic can still pick up people near you. Word lists go to the speech service too.
+- With a Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs
+  or Deepgram.
+- Keys live in `.env`, which is git-ignored.
 - The page only accepts WebSocket connections from its own origin, so another website open in
-  your browser cannot make Murmur send messages.
-- The band's firmware lights its LED blue while the mic is on, and the kit cannot turn that
-  off. Inside a retainer it is hidden. Tell people near you that you are recording.
-- **Hardware in your mouth:** test everything unsealed first. Never charge the battery while it
-  is in your mouth, keep a floss tether outside your lips, keep sessions short, and take it out
-  at once if it feels warm or swollen.
+  your browser cannot make Murmur act.
+- The band lights its LED blue while the mic is on, and the kit cannot turn that off. Tell
+  people near you that you are recording.
+- Hardware in your mouth: test it unsealed first. Never charge the battery while it is in your
+  mouth, keep a floss tether outside your lips, keep sessions short, and take it out at once if
+  it feels warm or swollen.
+
+## Limits
+
+- Whisper mode is measured on one 40 s recording in one room. Crowds, music and someone else
+  whispering nearby are untested.
+- In voice mode, level calibration could not separate that room: its loudest moments (p95
+  -19.3 dB) were louder than most of the whisper (p70 -20.8 dB).
+- Bluetooth has not worked yet. Our one try said "Could not see Vexo-HACK-82", and we did not
+  find out why.
+- Gemini, typing, the command agent, spoken replies and iMessage are tested against fakes only.
+- Whether a double-tap registers with the board in a retainer is untested
+  (`MURMUR_TAP_THRESHOLD` sets the sensitivity).
+- Transcript pieces are grouped by a time window (`MURMUR_SETTLE_S`), not by turn.
+- There is no installer; `scripts/setup.sh` is the whole setup.
 
 ## Layout
 
 ```
-server/            Python app (aiohttp)
-  gate.py          whisper gate + turn detection + calibration
-  stt/             ElevenLabs, Deepgram, and a mock engine
-  owner.py         "which speaker is me"
-  wake.py          the "Hey Murmur" prefix
-  pipeline.py      band audio in → agent out
-  band_source.py   talks to the band through the Vexo kit
-  imessage.py      send and read iMessages
-  agents.py        dry-run and Instinct agents
-web/               the localhost page (plain HTML, CSS, JS)
-tests/             unittest suite
-scripts/setup.sh   fetch the kit (pinned commit), venv, deps
-vexo-open-kit/     created by setup.sh; git-ignored; do not edit
+server/                 Python app (aiohttp); __main__.py is the command line
+  pipeline.py           audio in, through gate, engine and turns, to the agent
+  gate.py, wake.py      whisper gate and turns; the command check
+  owner.py, vocab.py    voice mode's speaker filter; the word list (vocab.txt)
+  agents.py             Instinct, Gemini, command and dry-run agents
+  imessage.py, gemini.py, typer.py, voice.py   what the agents use
+  stt/                  Pipecat, Deepgram, ElevenLabs and mock engines
+  band_source.py        the band through the Vexo kit (USB, Bluetooth, pretend band)
+  mic_source.py, replay_source.py   a Mac input or a recording instead of the band
+  bodygate.py           accelerometer own-voice check (MURMUR_OWN_VOICE, off)
+  app.py, hub.py        the page's server and its WebSocket events
+web/                    the localhost page (plain HTML, CSS, JS)
+scripts/                setup.sh, guided_recording.py and analyze_recording.py, check_keys.py
+tests/                  unittest suite
+vexo-open-kit/          created by setup.sh at a pinned commit; git-ignored
 ```
 
 Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
 
-## What is unproven
+## Built with
 
-- **Live speech services.** The ElevenLabs and Deepgram message handling is tested against
-  messages copied from their docs, and each engine ran live once on recorded files. Two guesses to check first:
-  that ElevenLabs accepts a commit on a short chunk of silence, and that it keeps a session
-  open while we stream silence between whispers.
-- **The gate in a loud room.** It assumes your whisper at the band mic is louder than the music.
-  If calibration says they are too close, move the band closer or lower the music; if that
-  fails, the next step is a spectral or voice-activity check on top of level.
-- **Diarization on whispers.** Speaker labels on whispered, single-speaker audio may be
-  unstable. The owner filter treats the first label as you, so a mid-session label change
-  would drop your own words; "Enroll me" repairs that.
-- **iMessage.** Sending and reading replies are tested against fakes. Reading uses a
-  common heuristic for newer macOS message storage.
-- **Taps on a cheek-mounted board**, and the mic's orientation in the mouth (facing the cheek or
-  the teeth). Test these with the board unsealed, held against your back teeth.
-- **Whisper mode** is measured on one 40 s recording, one room. Crowds, music and someone else
-  whispering nearby are untested. Level calibration could not separate that room (the room's
-  loudest moments, p95 -19.3 dB, were louder than most of the whisper, p70 -20.8 dB).
-- **Gemini, typing, spoken replies in the app and the mic backup**: tested against fakes only. With a
-  Gemini key, command text goes to Google; spoken replies send their text to ElevenLabs or Deepgram.
-
-## Not built yet
-
-- Per-turn rather than time-window grouping of transcript pieces (`settle_s` in `config.py`).
-- A packaged installer. `scripts/setup.sh` is the whole setup.
-
-## Credits
-
-The band's Python library and Bluetooth contract: [Vexo Open kit](https://github.com/VexoAI-Org/vexo-open-kit)
-(MIT), fetched by `setup.sh` at a pinned commit.
+- [Vexo Open kit](https://github.com/VexoAI-Org/vexo-open-kit) (MIT): the band's Python library,
+  fetched by `setup.sh` at a pinned commit.
+- [Deepgram](https://deepgram.com) Nova-3 for speech to text, through [Pipecat](https://github.com/pipecat-ai/pipecat).
+- [ElevenLabs](https://elevenlabs.io) Scribe v3 Live for speech to text, and its voices for spoken replies.
