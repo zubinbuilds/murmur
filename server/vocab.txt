@@ -1,0 +1,52 @@
+# Words a general speech model gets wrong and a spoken command is likely to hold, one per line, most useful first.
+# The list is cut at vocab.CAP terms. Lines starting with # are skipped.
+Murmur
+Vexo
+iMessage
+FaceTime
+Slack
+Notion
+Gmail
+GitHub
+WhatsApp
+Spotify
+Zoom
+Discord
+YouTube
+Safari
+Chrome
+Figma
+Messages
+Instinct
+Deepgram
+ElevenLabs
+Pipecat
+Gemini
+Devpost
+Google Docs
+Google Calendar
+Google Drive
+Outlook
+Microsoft Teams
+Telegram
+Signal
+Uber
+Lyft
+DoorDash
+Venmo
+Airbnb
+LinkedIn
+Instagram
+TikTok
+Reddit
+Xcode
+VS Code
+Cursor
+Claude
+ChatGPT
+Linear
+Jira
+Trello
+Dropbox
+Keynote
+Spotlight
