@@ -7,7 +7,7 @@ import json
 from collections import deque
 from typing import Optional
 
-REPLAYED = {"transcript", "command", "reply", "note"}
+REPLAYED = {"transcript", "turn", "command", "reply", "note"}
 
 
 class Hub:

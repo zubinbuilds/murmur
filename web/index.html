@@ -4,75 +4,67 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Murmur</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <h1>Murmur</h1>
-    <div class="pills">
-      <span class="pill" id="pill-conn">Connecting to server</span>
-      <span class="pill" id="pill-band">Band</span>
-      <span class="pill" id="pill-listen">Not listening</span>
-      <span class="pill hidden" id="pill-armed">Armed: say your command</span>
-      <span class="pill warn hidden" id="pill-dry">Dry run: nothing is sent</span>
+  <div class="sky" aria-hidden="true">
+    <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div>
+  </div>
+
+  <header class="top">
+    <a class="glass round" href="/console" title="Control panel" aria-label="Control panel">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>
+    </a>
+    <div class="center-pills">
+      <button id="listen" class="glass pill dark-pill" type="button">
+        <span class="dot" id="listen-dot"></span><span id="listen-label">Start listening</span>
+      </button>
+      <div class="segmented glass">
+        <span class="seg active">Chat</span>
+        <a class="seg" href="/console">Room</a>
+      </div>
+    </div>
+    <div class="right-pills">
+      <button id="voice" class="glass pill" type="button">Voice on</button>
+      <div class="avatar" id="avatar" title="Your mic level">
+        <div class="ring" id="ring"></div>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 12c2.5 3 11.5 3 14 0"/><path d="M7 10.5c1.5-1.4 3-1.4 5 0 2-1.4 3.5-1.4 5 0"/></svg>
+      </div>
     </div>
   </header>
 
-  <main>
-    <section class="panel" aria-label="Transcript">
-      <div class="meter" title="Mic level. The marker is the whisper gate.">
-        <div id="meter-fill"></div>
-        <div id="meter-threshold"></div>
-        <span id="meter-label">-90 dB</span>
-      </div>
-      <div id="transcript" aria-live="polite"></div>
-      <div id="partial"></div>
-      <p class="muted" id="ignored"></p>
-    </section>
+  <aside class="clock">
+    <div class="big" id="day">&nbsp;</div>
+    <div class="big" id="date">&nbsp;</div>
+    <div class="big" id="time">&nbsp;</div>
+    <div class="meta">
+      <div><span class="dot" id="band-dot"></span><span id="band-label">Connecting to mouthpiece</span></div>
+      <div id="isolation">Only your voice is heard</div>
+    </div>
+  </aside>
 
-    <aside>
-      <section class="panel">
-        <h2>Listening</h2>
-        <button id="listen" class="primary">Start listening</button>
-        <label>Speech engine
-          <select id="engine">
-            <option value="elevenlabs">ElevenLabs Scribe v3 Live</option>
-            <option value="deepgram">Deepgram Nova-3</option>
-            <option value="mock">Mock (no key)</option>
-          </select>
-        </label>
-        <p class="muted" id="band-detail"></p>
-      </section>
-
-      <section class="panel">
-        <h2>Whisper gate</h2>
-        <p class="muted">Only audio above the marker is transcribed. Calibrate in the room you will use it in, with the music on if there will be music.</p>
-        <div class="row">
-          <button id="cal-noise">1. Record room (3 s)</button>
-          <button id="cal-whisper">2. Whisper (3 s)</button>
-        </div>
-        <p class="muted" id="cal-msg"></p>
-        <div class="row">
-          <button id="enroll">Enroll my voice</button>
-          <span class="muted" id="owner"></span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Agent</h2>
-        <p class="muted">Start a turn with "Hey <span id="wake-name">Murmur</span>".</p>
-        <ul id="commands"></ul>
-      </section>
-
-      <section class="panel">
-        <h2>Test without speaking</h2>
-        <form id="say-form" class="row">
-          <input id="say-text" type="text" placeholder="Hey Murmur, email Sam I'm late" autocomplete="off">
-          <button type="submit">Send</button>
-        </form>
-      </section>
-    </aside>
+  <main class="chat" id="chat" aria-live="polite">
+    <div class="day-sep" id="day-sep"></div>
+    <div id="messages"></div>
+    <div class="row mine" id="live-row" hidden><div class="bubble mine live" id="live"></div></div>
+    <div class="row" id="typing-row" hidden><div class="bubble typing"><i></i><i></i><i></i></div></div>
   </main>
+
+  <form class="composer glass" id="composer" autocomplete="off">
+    <input id="say" maxlength="400" placeholder="Message Murmur" aria-label="Message Murmur">
+    <button type="submit" class="icon" aria-label="Send">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button type="button" class="icon" id="mic" aria-label="Listening on or off">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20"/></svg>
+    </button>
+  </form>
+
+  <button class="unlock glass pill" id="unlock" type="button" hidden>Tap to hear replies</button>
+  <div class="toast" id="toast" hidden></div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

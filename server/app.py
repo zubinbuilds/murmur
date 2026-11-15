@@ -38,6 +38,19 @@ async def index(request: web.Request) -> web.StreamResponse:
     return web.FileResponse(WEB_DIR / "index.html")
 
 
+async def console(request: web.Request) -> web.StreamResponse:
+    """The original control panel: level meter, calibration, engine choice, raw events."""
+    return web.FileResponse(WEB_DIR / "console" / "index.html")
+
+
+async def clip(request: web.Request) -> web.StreamResponse:
+    tts = request.app[PIPELINE].tts
+    audio = tts.clips.get(request.match_info["clip"]) if tts else None
+    if audio is None:
+        raise web.HTTPNotFound()
+    return web.Response(body=audio, content_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+
+
 async def websocket(request: web.Request) -> web.StreamResponse:
     if not origin_allowed(request, request.app[CFG].port):
         raise web.HTTPForbidden(text="Origin not allowed")
@@ -84,11 +97,21 @@ async def handle_command(pipeline: Pipeline, data: dict) -> None:
 def build_app(cfg: Config, *, with_band: bool = True, engine_factory=None, agent=None) -> web.Application:
     hub = Hub()
     pipeline = Pipeline(cfg, hub, engine_factory=engine_factory, agent=agent)
+    if not with_band:
+        pipeline.band_state = "off"
     app = web.Application()
     app[CFG], app[HUB], app[PIPELINE] = cfg, hub, pipeline
     app.router.add_get("/", index)
+    app.router.add_get("/console", console)
     app.router.add_get("/ws", websocket)
+    app.router.add_get("/voice/{clip}", clip)
     app.router.add_static("/static", WEB_DIR)
+
+    async def no_cache(request: web.Request, response: web.StreamResponse) -> None:
+        if request.path == "/" or request.path.startswith(("/static", "/console")):
+            response.headers["Cache-Control"] = "no-cache"  # page edits show up on a plain reload
+
+    app.on_response_prepare.append(no_cache)
 
     async def on_startup(app: web.Application) -> None:
         hub.start()

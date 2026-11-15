@@ -47,7 +47,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_page_and_script_are_served(self):
         await self.start(with_band=False)
-        for path in ("/", "/static/app.js", "/static/style.css"):
+        for path in ("/", "/console", "/static/app.js", "/static/style.css", "/static/console/app.js"):
             resp = await self.client.get(path)
             self.assertEqual(resp.status, 200, path)
 

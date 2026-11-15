@@ -54,6 +54,12 @@ class Config:
     gate_threshold_db: float = -45.0
     gate_margin_db: float = 10.0
     turn_silence_ms: int = 700
+    anthropic_key: str = ""
+    llm_model: str = "claude-opus-5-5"
+    tts_enabled: bool = True
+    tts_model: str = "eleven_v4_turbo"
+    tts_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"
+    reply_wait_s: float = 120.0  # how long the page shows "typing" while waiting for the agent
     settle_s: float = 1.2  # wait this long after the last transcript piece before acting on a turn
     host: str = "127.0.0.1"
     port: int = 8000
@@ -77,4 +83,9 @@ class Config:
             gate_threshold_db=_num("MURMUR_GATE_THRESHOLD_DB", -45.0),
             gate_margin_db=_num("MURMUR_GATE_MARGIN_DB", 10.0),
             turn_silence_ms=_num("MURMUR_TURN_SILENCE_MS", 700, int),
+            anthropic_key=_get("ANTHROPIC_API_KEY"),
+            llm_model=_get("MURMUR_LLM_MODEL", "claude-opus-5-5"),
+            tts_enabled=_get("MURMUR_TTS", "1").lower() not in ("0", "false", "no", "off"),
+            tts_model=_get("MURMUR_TTS_MODEL", "eleven_v4_turbo"),
+            tts_voice_id=_get("MURMUR_TTS_VOICE", "JBFqnCBsd6RMkjVDRZzb"),
         )

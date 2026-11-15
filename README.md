@@ -87,12 +87,25 @@ Add another by implementing `STTEngine` in `server/stt/base.py`.
 | ElevenLabs | Scribe v3 Live (`scribe_v3_live`) | `diarize=true` | manual commit |
 | Deepgram | Nova-3 | `diarize=true` | `Finalize` message |
 
+**The brain** (`server/brain.py`, `server/memory.py`). When a turn starts with "Hey Murmur",
+one Claude call (`claude-opus-5-5`, low effort) gets the request plus the last 30 minutes of what
+was heard: your lines, other people's lines and Murmur's replies. Claude has one tool,
+`message_computer`. It either calls the tool with the request rewritten as a clear first-person
+message that carries the context (names, places, what someone nearby said), or it answers
+directly in a sentence or two. Without `ANTHROPIC_API_KEY`, requests are sent as you said them.
+The tool call uses server-side refusal fallbacks (`fallbacks: "default"`).
+
+**Replies** are shown as chat bubbles and read aloud with ElevenLabs text to speech
+(`server/tts.py`, model `eleven_v4_turbo`, falls back to `eleven_flash_v2_5` if your account does
+not have it). The page never shows tool calls or names the agent. The old control panel (level
+meter, calibration, engine choice) is at `/console`, linked from the home button and "Room".
+
 **Instinct** (`server/agents.py`, `server/imessage.py`). Instinct is texted, so the bridge sends an
 iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 
 - Set `INSTINCT_IMESSAGE_TO` to the number (like `+15551234567`) or Apple ID email you text.
-- **Dry run is on by default** (`MURMUR_DRY_RUN=1`): the page shows what would be sent and
-  nothing leaves your machine. Set it to `0` only when you mean it.
+- **Dry run is on by default** (`MURMUR_DRY_RUN=1`): nothing is texted, and a practice reply
+  shows what would have been sent. Set it to `0` only when you mean it.
 - macOS asks once whether your terminal may control Messages. Reading replies needs Full
   Disk Access for your terminal.
 
@@ -100,6 +113,8 @@ iMessage with AppleScript and reads replies from `~/Library/Messages/chat.db`.
 
 - **Audio leaves your laptop** for ElevenLabs or Deepgram whenever you are listening. Only the
   gated stream is sent, but the mic can pick up people near you.
+- **Other people's words go to Claude as context** with each "Hey Murmur" request (never as
+  commands). They are kept in memory only, for 30 minutes, and are not written to disk.
 - Keys live in `.env`, which is git-ignored. Never commit it.
 - The page only accepts WebSocket connections from its own origin, so another website open in
   your browser cannot make Murmur send messages.
@@ -117,11 +132,14 @@ server/            Python app (aiohttp)
   stt/             ElevenLabs, Deepgram, and a mock engine
   owner.py         "which speaker is me"
   wake.py          the "Hey Murmur" prefix
+  memory.py        what was heard recently (context for the brain)
+  brain.py         Claude: answer, or rewrite and send to the computer agent
+  tts.py           ElevenLabs voice for replies
   pipeline.py      band audio in → agent out
   band_source.py   talks to the band through the Vexo kit
   imessage.py      send and read iMessages
   agents.py        dry-run and Instinct agents
-web/               the localhost page (plain HTML, CSS, JS)
+web/               the chat page (plain HTML, CSS, JS); web/console/ is the control panel
 tests/             unittest suite
 scripts/setup.sh   fetch the kit (pinned commit), venv, deps
 vexo-open-kit/     created by setup.sh; git-ignored; do not edit
@@ -148,7 +166,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -t .`.
 
 ## Not built yet
 
-- Streaming Instinct's reply back as speech or text in your ear.
+- Reading replies into an earpiece rather than the laptop speakers.
 - Per-turn rather than time-window grouping of transcript pieces (`settle_s` in `config.py`).
 - A packaged installer. `scripts/setup.sh` is the whole setup.
 

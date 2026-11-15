@@ -18,17 +18,31 @@ class AgentResult:
 class DryRunAgent:
     """Shows what would be sent and sends nothing. The default."""
 
-    def __init__(self, reason: str = "dry run is on (MURMUR_DRY_RUN=1)") -> None:
+    def __init__(self, reason: str = "dry run is on (MURMUR_DRY_RUN=1)", reply_after: float = 1.5) -> None:
         self.reason = reason
+        self.reply_after = reply_after
+        self._on_reply: Optional[Callable[[str], None]] = None
+        self._tasks: set = set()
 
     async def start(self, on_reply: Callable[[str], None], on_error: Callable[[str], None]) -> None:
-        return None
+        self._on_reply = on_reply
 
     async def stop(self) -> None:
-        return None
+        for task in self._tasks:
+            task.cancel()
 
     async def send(self, command: str) -> AgentResult:
+        if self._on_reply is not None and self.reply_after >= 0:
+            task = asyncio.create_task(self._pretend_reply(command))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         return AgentResult("dry-run", f"Not sent: {self.reason}.")
+
+    async def _pretend_reply(self, command: str) -> None:
+        """A stand-in reply so the page can be rehearsed without texting anyone."""
+        await asyncio.sleep(self.reply_after)
+        if self._on_reply:
+            self._on_reply(f"Practice mode, nothing was sent. I would have asked your computer: {command}")
 
 
 class InstinctAgent:

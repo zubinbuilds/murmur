@@ -11,10 +11,13 @@ import time
 from typing import Callable, Optional
 
 from .agents import make_agent
+from .brain import make_brain
 from .gate import GateSettings, WhisperGate, suggest_threshold
 from .hub import Hub
+from .memory import Memory
 from .owner import OwnerFilter
 from .stt import STTError, make_engine
+from .tts import make_tts
 from .wake import WakeGate
 
 CALIBRATION_FRAMES = 150  # 3 seconds
@@ -22,7 +25,7 @@ CALIBRATION_FRAMES = 150  # 3 seconds
 
 class Pipeline:
     def __init__(self, cfg, hub: Hub, engine_factory: Optional[Callable] = None, agent=None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, brain=None, tts="auto") -> None:
         self.cfg = cfg
         self.hub = hub
         self.clock = clock
@@ -33,6 +36,11 @@ class Pipeline:
         self.owner = OwnerFilter()
         self.wake = WakeGate(cfg.wake_aliases, clock=clock)
         self.agent = agent or make_agent(cfg)
+        self.brain = brain or make_brain(cfg)
+        self.tts = make_tts(cfg) if tts == "auto" else tts
+        self.memory = Memory()
+        self._waiting_task: Optional[asyncio.Task] = None
+        self._speak_tasks: set = set()
         self.engine = None
         self.listening = False
         self.band_state = "starting"
@@ -53,11 +61,13 @@ class Pipeline:
 
     async def shutdown(self) -> None:
         self.listening = False
-        for task in (self._flush_task, self._reconnect_task):
+        for task in (self._flush_task, self._reconnect_task, self._waiting_task, *self._speak_tasks):
             if task:
                 task.cancel()
         await self._stop_engine()
         await self.agent.stop()
+        if self.tts:
+            await self.tts.close()
 
     def status(self) -> None:
         self.hub.emit({
@@ -73,6 +83,8 @@ class Pipeline:
             "threshold": round(self.gate.threshold, 1),
             "calibrated": self.gate.s.calibrated,
             "wake_aliases": list(self.cfg.wake_aliases),
+            "ignored_words": self._ignored,
+            "voice": self.tts is not None,
         })
 
     def set_band_status(self, state: str, detail: str = "") -> None:
@@ -213,7 +225,9 @@ class Pipeline:
                 self.hub.emit({"type": "transcript", "speaker": "you", "speaker_id": run["speaker"],
                                "text": run["text"]})
                 self._pending.append(run["text"])
+                self.memory.add("you", run["text"])
             else:
+                self.memory.add("other", run["text"], run["speaker"])
                 self._ignored += len(run["text"].split())
                 self.hub.emit({"type": "ignored", "speaker_id": run["speaker"],
                                "words": len(run["text"].split())})
@@ -243,23 +257,77 @@ class Pipeline:
         self._pending.clear()
         if not text:
             return
-        self.hub.emit({"type": "turn", "text": text})
         command = self.wake.feed(text)
+        self.hub.emit({"type": "turn", "text": text, "wake": bool(command) or self.wake.armed})
         self.status()
         if command:
             await self.run_command(command)
 
     async def run_command(self, command: str) -> None:
-        self.hub.emit({"type": "command", "text": command, "state": "sending", "dry_run": self.cfg.dry_run})
+        """A "Hey Murmur" request: the brain answers it or sends it on to the computer agent."""
+        self._set_thinking(True)
         try:
-            result = await self.agent.send(command)
+            decision = await self.brain.decide(command, self.memory.transcript())
         except Exception as e:
-            self.hub.emit({"type": "command", "text": command, "state": "error", "detail": str(e)})
+            self._set_thinking(False)
+            self.error("brain", f"Could not work out the request: {e}")
             return
-        self.hub.emit({"type": "command", "text": command, "state": result.state, "detail": result.detail})
+        if decision.kind != "send":
+            self._set_thinking(False)
+            self.reply(decision.text)
+            return
+        self.hub.emit({"type": "command", "text": decision.text, "request": command,
+                       "state": "sending", "dry_run": self.cfg.dry_run})
+        try:
+            result = await self.agent.send(decision.text)
+        except Exception as e:
+            self._set_thinking(False)
+            self.hub.emit({"type": "command", "text": decision.text, "state": "error", "detail": str(e)})
+            self.reply("I couldn't reach your computer just now.")
+            return
+        self.hub.emit({"type": "command", "text": decision.text, "state": result.state, "detail": result.detail})
+        self._wait_for_reply()
+
+    def _set_thinking(self, on: bool) -> None:
+        if not on and self._waiting_task:
+            self._waiting_task.cancel()
+            self._waiting_task = None
+        self.hub.emit({"type": "thinking", "on": on})
+
+    def _wait_for_reply(self) -> None:
+        if self._waiting_task:
+            self._waiting_task.cancel()
+
+        async def give_up() -> None:
+            await asyncio.sleep(self.cfg.reply_wait_s)
+            self._waiting_task = None
+            self.hub.emit({"type": "thinking", "on": False})
+
+        self._waiting_task = asyncio.create_task(give_up())
+
+    def reply(self, text: str) -> None:
+        """Show a reply in the chat, remember it, and read it aloud."""
+        text = (text or "").strip()
+        if not text:
+            return
+        self.memory.add("murmur", text)
+        self.hub.emit({"type": "reply", "text": text})
+        if self.tts is not None:
+            task = asyncio.create_task(self._speak(text))
+            self._speak_tasks.add(task)
+            task.add_done_callback(self._speak_tasks.discard)
+
+    async def _speak(self, text: str) -> None:
+        try:
+            clip = await self.tts.speak(text)
+        except Exception as e:
+            self.error("voice", str(e))
+            return
+        self.hub.emit({"type": "speak", "clip": clip})
 
     def _on_reply(self, text: str) -> None:
-        self.hub.emit({"type": "reply", "text": text})
+        self._set_thinking(False)
+        self.reply(text)
 
     def _on_agent_error(self, message: str) -> None:
         self.error("agent", message)
