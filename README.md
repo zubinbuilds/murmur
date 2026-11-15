@@ -2,9 +2,8 @@
 
 Whisper commands to your computer from a microphone in your mouth.
 
-You whisper, and the mic on a tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's
-firmware) sits in your mouth and hears it. A page on your laptop shows a live transcript of
-only your whispers. People talking out loud next to you are dropped before any speech service
+A tiny band board (Seeed XIAO nRF52840 Sense, running Vexo's firmware) sits in your mouth and
+its mic hears you whisper. A page on your laptop shows a live transcript of only your whispers. People talking out loud next to you are dropped before any speech service
 hears them. Each whisper is a command: Murmur can type it into the app in front, hand it to
 your own program (for computer use), text it to [Instinct](https://instinct.com) or have
 Gemini answer it.
